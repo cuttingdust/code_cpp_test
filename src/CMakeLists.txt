@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.12)
 set(CMAKE_TOOLCHAIN_FILE $ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake CACHE STRING "Vcpkg toolchain file")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-project(memory_test)
+project(cpp_test)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 if(MSVC)
@@ -28,11 +28,11 @@ if(OpenMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
-# OpenCV
-find_package(OpenCV CONFIG REQUIRED)
-message("OpenCV_FOUND = ${OpenCV_FOUND}")
-message("OpenCV_VERSION = ${OpenCV_VERSION}")
-message("OpenCV_LIBS = ${OpenCV_LIBS}")
+# # OpenCV
+# find_package(OpenCV CONFIG REQUIRED)
+# message("OpenCV_FOUND = ${OpenCV_FOUND}")
+# message("OpenCV_VERSION = ${OpenCV_VERSION}")
+# message("OpenCV_LIBS = ${OpenCV_LIBS}")
 
 # 外部依赖项
 set(DPS_INCLUDES)
@@ -55,7 +55,7 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CommonTools)
 
-add_subdirectory(memory_array_opencv)
+add_subdirectory(MemoryLeakDetector)
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
