@@ -56,7 +56,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CommonTools)
 
 add_subdirectory(MemoryLeakDetector)
+add_subdirectory(GuessWord)
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
-file(COPY ${ASSERT_PATH} DESTINATION ${OUT_RUN_PATH})
+file(COPY ${ASSERT_PATH} DESTINATION ${OUT_RUN_PATH}) 
