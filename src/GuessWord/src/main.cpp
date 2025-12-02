@@ -34,13 +34,13 @@ class WordGame
 private:
     static constexpr int MAX_WRONG = 8;
 
-    vector<string> words = { "GUESS", "CPLUSPLUS", "HANGMAN", "PROGRAM", "DEVELOPER" };
-    string         targetWord;
-    string         currentGuess;
-    string         usedLetters;
-    int            wrongAttempts = 0;
+    vector<string> words_ = { "GUESS", "CPLUSPLUS", "HANGMAN", "PROGRAM", "DEVELOPER" };
+    string         targetWord_;
+    string         currentGuess_;
+    string         usedLetters_;
+    int            wrongAttempts_ = 0;
 
-    std::mt19937 rng{ std::random_device{}() };
+    std::mt19937 rng_{ std::random_device{}() };
 
 public:
     WordGame()
@@ -50,19 +50,19 @@ public:
 
     void initializeGame()
     {
-        std::ranges::shuffle(words, rng);
-        targetWord   = words.front();
-        currentGuess = string(targetWord.size(), '-');
-        usedLetters.clear();
-        wrongAttempts = 0;
+        std::ranges::shuffle(words_, rng_);
+        targetWord_   = words_.front();
+        currentGuess_ = string(targetWord_.size(), '-');
+        usedLetters_.clear();
+        wrongAttempts_ = 0;
     }
 
     void displayGameState() const
     {
         cout << std::format("\n=== 猜单词游戏 ===\n");
-        cout << std::format("剩余尝试次数: {}\n", MAX_WRONG - wrongAttempts);
-        cout << std::format("已用字母: {}\n", usedLetters.empty() ? "无" : usedLetters);
-        cout << std::format("当前单词: {}\n", currentGuess);
+        cout << std::format("剩余尝试次数: {}\n", MAX_WRONG - wrongAttempts_);
+        cout << std::format("已用字母: {}\n", usedLetters_.empty() ? "无" : usedLetters_);
+        cout << std::format("当前单词: {}\n", currentGuess_);
     }
 
     [[nodiscard]] char getValidGuess() const
@@ -87,7 +87,7 @@ public:
                 continue;
             }
 
-            if (usedLetters.contains(guess))
+            if (usedLetters_.contains(guess))
             { /// C++23 或 C++20 的 string::contains
                 cout << std::format("字母 '{}' 已经使用过了！\n", guess);
                 continue;
@@ -99,15 +99,15 @@ public:
 
     void processGuess(char guess)
     {
-        usedLetters += guess;
+        usedLetters_ += guess;
 
         bool found = false;
-        for (size_t i = 0; i < targetWord.size(); ++i)
+        for (size_t i = 0; i < targetWord_.size(); ++i)
         {
-            if (targetWord[i] == guess)
+            if (targetWord_[i] == guess)
             {
-                currentGuess[i] = guess;
-                found           = true;
+                currentGuess_[i] = guess;
+                found            = true;
             }
         }
 
@@ -117,7 +117,7 @@ public:
         }
         else
         {
-            ++wrongAttempts;
+            ++wrongAttempts_;
             cout << std::format("抱歉，字母 '{}' 不在单词中。\n", guess);
             displayHangman();
         }
@@ -137,31 +137,31 @@ public:
             "  +---+\n  |   |\n [O]  |\n /|\\  |\n / \\  |\n      |\n========="
         };
 
-        if (wrongAttempts > 0 && wrongAttempts <= MAX_WRONG)
+        if (wrongAttempts_ > 0 && wrongAttempts_ <= MAX_WRONG)
         {
-            cout << hangmanStates[wrongAttempts] << "\n";
+            cout << hangmanStates[wrongAttempts_] << "\n";
         }
     }
 
     bool isGameOver() const
     {
-        return wrongAttempts >= MAX_WRONG || currentGuess == targetWord;
+        return wrongAttempts_ >= MAX_WRONG || currentGuess_ == targetWord_;
     }
 
     void displayResult() const
     {
         cout << "\n" << std::string(40, '=') << "\n";
 
-        if (wrongAttempts >= MAX_WRONG)
+        if (wrongAttempts_ >= MAX_WRONG)
         {
             cout << std::format("游戏结束！您已用尽所有尝试次数。\n");
-            cout << std::format("正确答案是: {}\n", targetWord);
+            cout << std::format("正确答案是: {}\n", targetWord_);
         }
         else
         {
             cout << std::format("恭喜您！猜对了单词！\n");
-            cout << std::format("单词是: {}\n", targetWord);
-            cout << std::format("您使用了 {} 次尝试。\n", usedLetters.size() + wrongAttempts);
+            cout << std::format("单词是: {}\n", targetWord_);
+            cout << std::format("您使用了 {} 次尝试。\n", usedLetters_.size() + wrongAttempts_);
         }
 
         auto stats = getGameStats();
@@ -173,14 +173,14 @@ public:
 
     auto getGameStats() const
     {
-        int correct =
-                std::ranges::count_if(usedLetters,
-                                      [this](char c)
-                                      {
-                                          return targetWord.contains(c); // C++23，或 targetWord.find(c) != string::npos
-                                      });
-        int incorrect = usedLetters.size() - correct;
-        int total     = correct + incorrect + wrongAttempts;
+        int correct   = std::ranges::count_if(usedLetters_,
+                                              [this](char c)
+                                              {
+                                                return targetWord_.contains(
+                                                        c); // C++23，或 targetWord_.find(c) != string::npos
+                                            });
+        int incorrect = usedLetters_.size() - correct;
+        int total     = correct + incorrect + wrongAttempts_;
         return std::make_tuple(correct, incorrect, total);
     }
 
