@@ -57,6 +57,7 @@ include(CommonTools)
 
 add_subdirectory(MemoryLeakDetector)
 add_subdirectory(GuessWord)
+add_subdirectory(Card21Game)
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
