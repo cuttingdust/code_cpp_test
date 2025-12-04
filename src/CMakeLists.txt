@@ -34,6 +34,11 @@ endif()
 # message("OpenCV_VERSION = ${OpenCV_VERSION}")
 # message("OpenCV_LIBS = ${OpenCV_LIBS}")
 
+find_package(fmt CONFIG REQUIRED)
+# message("fmt_FOUND = ${fmt_FOUND}")
+# message("fmt_VERSION = ${fmt_VERSION}")
+# message("fmt_LIBS = ${fmt_LIBS}")
+
 # 外部依赖项
 set(DPS_INCLUDES)
 set(DPS_TARGETS)
@@ -59,6 +64,7 @@ add_subdirectory(MemoryLeakDetector)
 add_subdirectory(GuessWord)
 add_subdirectory(Card21Game)
 add_subdirectory(TicTacToe)
+add_subdirectory(Timer)
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
