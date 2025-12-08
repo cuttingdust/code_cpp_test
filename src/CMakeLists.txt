@@ -65,6 +65,7 @@ add_subdirectory(GuessWord)
 add_subdirectory(Card21Game)
 add_subdirectory(TicTacToe)
 add_subdirectory(Timer)
+add_subdirectory(MoveTest)
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
