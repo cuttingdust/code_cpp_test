@@ -69,6 +69,7 @@ add_subdirectory(MoveTest)
 add_subdirectory(LogicalOpt)
 add_subdirectory(EnumTest)
 add_subdirectory(Base16test)
+add_subdirectory(Base16API)
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
