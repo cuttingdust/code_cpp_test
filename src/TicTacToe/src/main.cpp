@@ -108,7 +108,7 @@ public:
     std::vector<int> getValidMoves() const
     {
         std::vector<int> moves;
-        moves.reserve(Constants::BOARD_SIZE); // 预分配空间
+        moves.reserve(Constants::BOARD_SIZE); /// 预分配空间
 
         for (int i = 0; i < Constants::BOARD_SIZE; ++i)
         {
@@ -144,14 +144,14 @@ public:
     /// @brief 清空棋盘（重置所有位置为空）
     void clear()
     {
-        std::fill(board_.begin(), board_.end(), static_cast<char>(Symbol::EMPTY));
+        std::ranges::fill(board_, static_cast<char>(Symbol::EMPTY));
     }
 
     /// @brief 检查棋盘是否已满
     /// @return 如果所有位置都有棋子则返回true
     bool isFull() const
     {
-        return std::all_of(board_.begin(), board_.end(), [](char c) { return c != static_cast<char>(Symbol::EMPTY); });
+        return std::ranges::all_of(board_, [](char c) { return c != static_cast<char>(Symbol::EMPTY); });
     }
 };
 
@@ -254,9 +254,9 @@ public:
 class AIPlayer
 {
 private:
-    char         aiSymbol_ = ' '; ///< AI使用的棋子符号
+    char         aiSymbol_    = ' '; ///< AI使用的棋子符号
     char         humanSymbol_ = ' '; ///< 人类使用的棋子符号
-    std::mt19937 rng_;         ///< C++20 随机数生成器
+    std::mt19937 rng_;               ///< C++20 随机数生成器
 
 public:
     /// @brief 构造函数
@@ -288,7 +288,7 @@ public:
             return blockMove;
         }
 
-        // 策略3：按照最佳位置顺序选择
+        ///  策略3：按照最佳位置顺序选择
         for (int move : Constants::BEST_MOVES)
         {
             if (move >= 0 && move < Constants::BOARD_SIZE && board[move] == static_cast<char>(Symbol::EMPTY))
@@ -298,7 +298,7 @@ public:
             }
         }
 
-        // 策略4：随机选择一个有效位置
+        /// 策略4：随机选择一个有效位置
         return getRandomMove(board);
     }
 
@@ -318,7 +318,7 @@ private:
                 testBoard[i]                = symbol;
 
                 /// 检查是否获胜
-                Player result   = GameLogic::checkWinner(testBoard);
+                Player result = GameLogic::checkWinner(testBoard);
 
                 if (bool isWinner = (symbol == aiSymbol_) ? (result == Player::COMPUTER) : (result == Player::HUMAN))
                 {
@@ -338,7 +338,7 @@ private:
 
         if (!validMoves.empty())
         {
-            // 使用C++20的均匀分布生成随机索引
+            /// 使用C++20的均匀分布生成随机索引
             std::uniform_int_distribution<std::size_t> dist(0, validMoves.size() - 1);
             return validMoves[dist(rng_)];
         }
@@ -389,7 +389,7 @@ public:
         delete aiPlayer_;
     }
 
-    // 禁止拷贝和移动
+    /// 禁止拷贝和移动
     TicTacToeGame(const TicTacToeGame&)            = delete;
     TicTacToeGame& operator=(const TicTacToeGame&) = delete;
     TicTacToeGame(TicTacToeGame&&)                 = delete;
@@ -401,7 +401,7 @@ public:
         board_.clear();
         board_.displayInstructions();
 
-        // 选择先手玩家
+        /// 选择先手玩家
         humanTurnFirst_ = InputHandler::getYesNoInput("您想要先手吗？");
 
         if (humanTurnFirst_)
@@ -469,7 +469,7 @@ private:
                 break;
             }
 
-            // 切换玩家
+            /// 切换玩家
             currentPlayer = (currentPlayer == Player::HUMAN) ? Player::COMPUTER : Player::HUMAN;
         }
     }
@@ -535,7 +535,7 @@ private:
     {
         board_.clear();
 
-        // 如果需要交换先手
+        /// 如果需要交换先手
         if (!humanTurnFirst_)
         {
             humanTurnFirst_ = InputHandler::getYesNoInput("您想要先手吗？");
