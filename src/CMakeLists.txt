@@ -73,6 +73,8 @@ add_subdirectory(Base16API)
 add_subdirectory(CoutTest) # 控制台的输入输出
 add_subdirectory(CinTest)
 add_subdirectory(StringStreamTest) # 字符串的输入输出
+add_subdirectory(FileStreamOutTest) # 文件的输出
+add_subdirectory(FileStreamInTest) # 文件的输入
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
