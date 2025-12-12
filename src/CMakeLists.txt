@@ -70,8 +70,9 @@ add_subdirectory(LogicalOpt)
 add_subdirectory(EnumTest)
 add_subdirectory(Base16test)
 add_subdirectory(Base16API)
-add_subdirectory(CoutTest)
+add_subdirectory(CoutTest) # 控制台的输入输出
 add_subdirectory(CinTest)
+add_subdirectory(StringStreamTest) # 字符串的输入输出
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
