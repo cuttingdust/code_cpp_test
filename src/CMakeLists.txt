@@ -76,6 +76,7 @@ add_subdirectory(StringStreamTest) # 字符串的输入输出
 add_subdirectory(FileStreamOutTest) # 文件的输出
 add_subdirectory(FileStreamInTest) # 文件的输入
 add_subdirectory(FileLogTest) # 日志测试
+add_subdirectory(ProgrammingParadigmTest) # 编程范式
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
