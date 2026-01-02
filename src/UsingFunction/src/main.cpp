@@ -1,5 +1,6 @@
 ﻿#include <iostream>
 #include <string>
+#include <functional>
 
 
 int TestFuncPtr(std::string str)
@@ -23,7 +24,9 @@ public:
     }
     void Call()
     {
-        (this->*func_)("para Call in Class auto call");
+        // (this->*func_)("para Call in Class auto call");
+        func_(*this, "para Call in Class auto call use std::function");
+        /// 这样调用的话 不如直接使用函数指针 明确
     }
     int Test(std::string str)
     {
@@ -32,7 +35,8 @@ public:
     }
 
 private:
-    Func func_{ nullptr };
+    // Func func_{ nullptr };
+    std::function<int(MyClass &, std::string)> func_;
 };
 
 /// 声明成员函数指针类型
@@ -45,7 +49,10 @@ int main(int argc, char *argv[])
     fun_ptr("no using/typedef");
 
     FuncType ft = TestFuncPtr;
-    ft("test");
+    ft("use using/typedef");
+
+    std::function<int(std::string)> fun_template = TestFuncPtr;
+    fun_template("using std::function");
 
     //////////////////////////////////////////////////////////////////
     std::cout << "==========================================" << std::endl;
@@ -58,6 +65,9 @@ int main(int argc, char *argv[])
 
     CFun cfun2 = &MyClass::Test;
     (my_class.*cfun2)("para auto cfun with using");
+
+    std::function<int(MyClass &, std::string)> cfunction = &MyClass::Test;
+    cfunction(my_class, "para auto cfun with std::function");
 
     my_class.Call();
 
