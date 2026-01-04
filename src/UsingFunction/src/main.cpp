@@ -59,11 +59,22 @@ int TestBind(int x, int y, std::string str, int count)
     return 0;
 }
 
+// // 使用 Lambda - 清晰直观
+// auto lambda = [str = std::string("临时")](int x) { std::cout << str << x; };
+//
+// // 使用 std::bind - 需要额外步骤
+// std::string temp_str = "临时";
+// auto        bind_func =
+//         std::bind([](const std::string &s, int x) { std::cout << s << x; }, std::move(temp_str), std::placeholders::_1);
+
 int main(int argc, char *argv[])
 {
     auto bfun = std::bind(TestBind, 100, 200, std::placeholders::_1, std::placeholders::_2);
-
     bfun("test bind 2", 999);
+
+    /// 替换后 /// 都是闭包的一种
+    auto lambda_bfun = [](const std::string &str, int count) { return TestBind(100, 200, str, count); };
+    lambda_bfun("test bind 2", 999);
 
     auto bfun2 = std::bind(TestBind, 100, 200, std::placeholders::_1, 888);
     bfun2("test bind 2");
@@ -75,6 +86,7 @@ int main(int argc, char *argv[])
 
     auto bfun4 = std::bind(TestBind, 100, 200, std::placeholders::_2, std::placeholders::_1);
     bfun4(777, "test bind 3");
+    /// 保存实参 lamba 使用就是 保存在
 
     /// 成员函数转换为普通函数
     MyClass data;
