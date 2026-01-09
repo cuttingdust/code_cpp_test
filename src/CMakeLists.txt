@@ -82,6 +82,7 @@ add_subdirectory(StringTest)
 add_subdirectory(DataPtr) 
 add_subdirectory(UsingFunction) #函数指针
 add_subdirectory(MsgServer) 
+add_subdirectory(XExecTest) 
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)
