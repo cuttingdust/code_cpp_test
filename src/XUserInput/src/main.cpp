@@ -7,42 +7,31 @@
 #include <sstream>
 #include <functional>
 #include <memory>
+#include <cctype>
+#include <stdexcept>
 
 /// \brief 分割字符串为子字符串向量
-/// \param input 要分割的输入字符串
-/// \param delimiter 分隔符，默认为空格
-/// \param trimWhitespace 是否修剪每个子字符串两端的空白字符，默认为true
-/// \return std::vector<std::string> 分割后的子字符串向量
 static auto split(const std::string& input, char delimiter = ' ', bool trimWhitespace = true)
         -> std::vector<std::string>
 {
     std::vector<std::string> ret;
-
-    /// 如果输入为空，直接返回空向量
     if (input.empty())
-    {
         return ret;
-    }
 
     std::string        tmp;
     std::istringstream iss(input);
 
     while (std::getline(iss, tmp, delimiter))
     {
-        /// 可选：修剪空白字符
         if (trimWhitespace)
         {
-            /// 删除左侧空白
             tmp.erase(tmp.begin(), std::ranges::find_if(tmp, [](unsigned char ch) { return !std::isspace(ch); }));
-
-            /// 删除右侧空白
             tmp.erase(std::ranges::find_if(std::ranges::reverse_view(tmp),
                                            [](unsigned char ch) { return !std::isspace(ch); })
                               .base(),
                       tmp.end());
         }
 
-        /// 跳过空字符串（可能由于连续分隔符导致）
         if (!tmp.empty())
         {
             ret.push_back(tmp);
@@ -52,12 +41,11 @@ static auto split(const std::string& input, char delimiter = ' ', bool trimWhite
     return ret;
 }
 
-/// 重载版本：支持字符串作为分隔符（更复杂的分割）
+/// 重载版本：支持字符串作为分隔符
 static auto split(const std::string& input, const std::string& delimiter, bool trimWhitespace = true)
         -> std::vector<std::string>
 {
     std::vector<std::string> ret;
-
     if (input.empty() || delimiter.empty())
     {
         ret.push_back(input);
@@ -89,7 +77,6 @@ static auto split(const std::string& input, const std::string& delimiter, bool t
         end   = input.find(delimiter, start);
     }
 
-    /// 添加最后一个部分
     std::string lastToken = input.substr(start);
     if (trimWhitespace)
     {
@@ -109,14 +96,285 @@ static auto split(const std::string& input, const std::string& delimiter, bool t
     return ret;
 }
 
-using MsgCallback = std::function<void(const std::string&)>;
-
 class XUserInput
 {
 public:
+    /// 参数值包装类 - 运行时类型转换
+    class ParameterValue
+    {
+        std::string value_;
+
+    public:
+        ParameterValue() = default;
+        ParameterValue(const std::string_view& value) : value_(value)
+        {
+        }
+        ParameterValue(const char* value) : value_(value ? value : "")
+        {
+        }
+
+        /// 类型转换接口
+        const std::string& asString() const
+        {
+            return value_;
+        }
+
+        int asInt() const
+        {
+            try
+            {
+                return std::stoi(value_);
+            }
+            catch (...)
+            {
+                throw std::runtime_error("无法将 '" + value_ + "' 转换为整数");
+            }
+        }
+
+        double asDouble() const
+        {
+            try
+            {
+                return std::stod(value_);
+            }
+            catch (...)
+            {
+                throw std::runtime_error("无法将 '" + value_ + "' 转换为浮点数");
+            }
+        }
+
+        bool asBool() const
+        {
+            if (value_.empty())
+                return false;
+            std::string lower = value_;
+            std::ranges::transform(lower, lower.begin(), ::tolower);
+            return lower == "true" || lower == "1" || lower == "yes" || lower == "on" || lower == "enabled";
+        }
+
+        /// 隐式转换到string
+        operator std::string() const
+        {
+            return value_;
+        }
+
+        /// 检查是否有值
+        bool empty() const
+        {
+            return value_.empty();
+        }
+
+        /// 原始值访问
+        const std::string& raw() const
+        {
+            return value_;
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////
+
+public:
+    /// 参数定义类
+    class Parameter
+    {
+    public:
+        enum class Type
+        {
+            String,
+            Int,
+            Double,
+            Bool
+        };
+
+        Parameter(const std::string_view& name, Type type = Type::String, const std::string_view& desc = "",
+                  bool required = false) : name_(name), type_(type), description_(desc), required_(required)
+        {
+        }
+
+        const std::string& getName() const
+        {
+            return name_;
+        }
+        Type getType() const
+        {
+            return type_;
+        }
+        const std::string& getDescription() const
+        {
+            return description_;
+        }
+        bool isRequired() const
+        {
+            return required_;
+        }
+
+        /// 获取类型名称
+        std::string getTypeName() const
+        {
+            switch (type_)
+            {
+                case Type::String:
+                    return "字符串";
+                case Type::Int:
+                    return "整数";
+                case Type::Double:
+                    return "浮点数";
+                case Type::Bool:
+                    return "布尔值";
+                default:
+                    return "未知";
+            }
+        }
+
+    private:
+        std::string name_;
+        Type        type_;
+        std::string description_;
+        bool        required_;
+    };
+
+    //////////////////////////////////////////////////////////////////
+
+public:
+    /// 任务定义类
+    class Task
+    {
+    public:
+        using TaskFunc = std::function<void(const std::map<std::string, ParameterValue>&)>;
+
+        Task(const std::string_view& name, const TaskFunc& func, const std::string_view& desc = "") :
+            name_(name), func_(func), description_(desc)
+        {
+        }
+
+        /// 为任务添加参数定义（支持指定类型）
+        Task& addParameter(const std::string& paramName, Parameter::Type type = Parameter::Type::String,
+                           const std::string& desc = "", bool required = false)
+        {
+            parameters_.emplace_back(paramName, type, desc, required);
+            return *this;
+        }
+
+        /// 便捷方法：添加字符串参数
+        Task& addStringParam(const std::string& paramName, const std::string& desc = "", bool required = false)
+        {
+            return addParameter(paramName, Parameter::Type::String, desc, required);
+        }
+
+        /// 便捷方法：添加整数参数
+        Task& addIntParam(const std::string& paramName, const std::string& desc = "", bool required = false)
+        {
+            return addParameter(paramName, Parameter::Type::Int, desc, required);
+        }
+
+        /// 便捷方法：添加浮点数参数
+        Task& addDoubleParam(const std::string& paramName, const std::string& desc = "", bool required = false)
+        {
+            return addParameter(paramName, Parameter::Type::Double, desc, required);
+        }
+
+        /// 便捷方法：添加布尔参数
+        Task& addBoolParam(const std::string& paramName, const std::string& desc = "", bool required = false)
+        {
+            return addParameter(paramName, Parameter::Type::Bool, desc, required);
+        }
+
+        /// 执行任务（带参数验证和类型检查）
+        bool execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const
+        {
+            /// 1. 验证必需参数
+            for (const auto& param : parameters_)
+            {
+                if (param.isRequired() && !inputParams.contains(param.getName()))
+                {
+                    errorMsg = "缺少必需参数: " + param.getName();
+                    return false;
+                }
+            }
+
+            /// 2. 类型检查和转换
+            std::map<std::string, ParameterValue> typedParams;
+            for (const auto& [key, strValue] : inputParams)
+            {
+                /// 查找参数定义
+                auto paramIt =
+                        std::ranges::find_if(parameters_, [&key](const Parameter& p) { return p.getName() == key; });
+
+                if (paramIt != parameters_.end())
+                {
+                    /// 有定义的类型参数，创建ParameterValue
+                    typedParams[key] = ParameterValue(strValue);
+
+                    /// 类型验证（简单版，实际执行时转换）
+                    try
+                    {
+                        switch (paramIt->getType())
+                        {
+                            case Parameter::Type::Int:
+                                typedParams[key].asInt(); /// 测试转换
+                                break;
+                            case Parameter::Type::Double:
+                                typedParams[key].asDouble(); /// 测试转换
+                                break;
+                            case Parameter::Type::Bool:
+                                typedParams[key].asBool(); /// 测试转换
+                                break;
+                            case Parameter::Type::String:
+                            default:
+                                break; /// 字符串无需特殊验证
+                        }
+                    }
+                    catch (const std::exception& e)
+                    {
+                        errorMsg = "参数 '" + key + "' 类型错误: " + e.what() +
+                                " (期望类型: " + paramIt->getTypeName() + ")";
+                        return false;
+                    }
+                }
+                else
+                {
+                    /// 未定义类型的参数，按字符串处理
+                    typedParams[key] = ParameterValue(strValue);
+                }
+            }
+
+            /// 3. 执行任务
+            try
+            {
+                func_(typedParams);
+                return true;
+            }
+            catch (const std::exception& e)
+            {
+                errorMsg = "执行错误: " + std::string(e.what());
+                return false;
+            }
+        }
+
+        const std::string& getName() const
+        {
+            return name_;
+        }
+        const std::string& getDescription() const
+        {
+            return description_;
+        }
+        const std::vector<Parameter>& getParameters() const
+        {
+            return parameters_;
+        }
+
+    private:
+        std::string            name_;
+        TaskFunc               func_;
+        std::string            description_;
+        std::vector<Parameter> parameters_;
+    };
+
+public:
     void start()
     {
-        std::cout << "命令处理器已启动。输入 'exit' 退出，'help' 查看帮助。" << std::endl;
+        std::cout << "任务处理器已启动。输入 'exit' 退出，'help' 查看帮助，'list' 列出任务。" << std::endl;
 
         while (is_running_)
         {
@@ -125,11 +383,8 @@ public:
             std::getline(std::cin, input);
 
             if (input.empty())
-            {
                 continue;
-            }
 
-            /// 处理特殊命令
             if (input == "exit")
             {
                 std::cout << "goodbye." << std::endl;
@@ -145,210 +400,251 @@ public:
 
             if (input == "list")
             {
-                listCommands();
+                listTasks();
                 continue;
             }
 
-            /// 解析并执行命令
             processCommand(input);
         }
-    };
+    }
 
     void stop()
     {
         is_running_ = false;
-    };
+    }
 
-    XUserInput& reg(const std::string& cmd, const MsgCallback& call, const std::string& description = "")
+    /// 注册任务（返回Task引用以便链式添加参数）
+    Task& registerTask(const std::string& name, Task::TaskFunc func, const std::string& description = "")
     {
-        callback_list_[cmd] = call;
-        if (!description.empty())
-        {
-            descriptions_[cmd] = description;
-        }
-        return *this;
+        auto  task    = std::make_unique<Task>(name, func, description);
+        auto& taskRef = *task;
+        tasks_[name]  = std::move(task);
+        return taskRef;
     }
 
 private:
+    /// 主命令处理函数
     void processCommand(const std::string& input)
     {
-        const auto& cmds = split(input);
-        if (cmds.empty())
+        if (input.starts_with("task "))
         {
+            processTaskCommand(input);
+        }
+        else
+        {
+            std::cout << "未知命令，任务命令请以 'task' 开头" << std::endl;
+        }
+    }
+
+    /// 解析并执行任务命令
+    void processTaskCommand(const std::string& input)
+    {
+        auto tokens = split(input);
+        if (tokens.size() < 2)
+        {
+            std::cout << "格式: task <任务名> [-参数 值]..." << std::endl;
             return;
         }
 
-        /// 第一种处理方式：直接命令
-        std::string mainCmd = cmds[0];
-        if (callback_list_.contains(mainCmd))
+        const std::string& taskName = tokens[1];
+        if (!tasks_.contains(taskName))
         {
-            /// 如果有参数，合并为字符串传给回调
-            std::string args;
-            if (cmds.size() > 1)
-            {
-                for (size_t i = 1; i < cmds.size(); ++i)
-                {
-                    args += cmds[i];
-                    if (i < cmds.size() - 1)
-                    {
-                        args += " ";
-                    }
-                }
-            }
-            try
-            {
-                callback_list_[mainCmd](args);
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << "执行命令时出错: " << e.what() << std::endl;
-            }
+            std::cout << "未知任务: " << taskName << std::endl;
             return;
         }
 
-        /// 第二种处理方式：参数化命令（如 -s source -d dest）
-        if (cmds.size() >= 2)
+        std::map<std::string, std::string> params;
+        for (size_t i = 2; i < tokens.size(); ++i)
         {
-            std::map<std::string, std::string> params;
-            std::string                        currentKey;
-
-            for (size_t i = 1; i < cmds.size(); ++i)
+            if (tokens[i][0] == '-')
             {
-                const auto& token = cmds[i];
-
-                if (callback_list_.contains(token))
-                {
-                    /// 如果这是一个已注册的关键字
-                    currentKey = token;
-                    /// 检查下一个token是否是值（不是关键字）
-                    if (i + 1 < cmds.size() && !callback_list_.contains(cmds[i + 1]))
-                    {
-                        params[currentKey] = cmds[i + 1];
-                        i++; /// 跳过值
-                    }
-                }
-            }
-
-            /// 执行所有找到的参数回调
-            for (const auto& [key, value] : params)
-            {
-                if (callback_list_.contains(key))
-                {
-                    try
-                    {
-                        callback_list_[key](value);
-                    }
-                    catch (const std::exception& e)
-                    {
-                        std::cout << "执行参数 '" << key << "' 时出错: " << e.what() << std::endl;
-                    }
-                }
-            }
-
-            if (!params.empty())
-            {
-                return;
+                const std::string& paramName  = tokens[i];
+                std::string        paramValue = (i + 1 < tokens.size() && tokens[i + 1][0] != '-') ? tokens[++i] : "";
+                params[paramName]             = paramValue;
             }
         }
 
-        /// 如果都没匹配到
-        std::cout << "未知命令: " << mainCmd << " (输入 'help' 查看可用命令)" << std::endl;
+        std::string error;
+        if (tasks_[taskName]->execute(params, error))
+        {
+            std::cout << "任务 '" << taskName << "' 执行成功" << std::endl;
+        }
+        else
+        {
+            std::cout << "任务执行失败: " << error << std::endl;
+            printTaskUsage(taskName);
+        }
+    }
+
+    void printTaskUsage(const std::string& taskName) const
+    {
+        if (!tasks_.contains(taskName))
+            return;
+
+        const auto& task = tasks_.at(taskName);
+        std::cout << "\n用法: task " << taskName;
+
+        for (const auto& param : task->getParameters())
+        {
+            std::cout << " " << param.getName();
+            if (!param.isRequired())
+                std::cout << " [值]";
+            else
+                std::cout << " <值>";
+        }
+        std::cout << std::endl;
+
+        if (!task->getDescription().empty())
+            std::cout << "描述: " << task->getDescription() << std::endl;
+
+        if (!task->getParameters().empty())
+        {
+            std::cout << "参数:" << std::endl;
+            for (const auto& param : task->getParameters())
+            {
+                std::cout << "  " << param.getName() << " - " << param.getDescription();
+                std::cout << " [" << param.getTypeName() << "]";
+                if (param.isRequired())
+                    std::cout << " (必需)";
+                std::cout << std::endl;
+            }
+        }
     }
 
     void printHelp() const
     {
-        std::cout << "\n=== 命令帮助 ===" << std::endl;
-        std::cout << "直接命令格式: <命令> [参数]" << std::endl;
-        std::cout << "参数化格式: <动作> -参数1 值1 -参数2 值2 ..." << std::endl;
-        std::cout << "\n可用命令:" << std::endl;
-
-        for (const auto& [cmd, desc] : descriptions_)
-        {
-            std::cout << "  " << cmd << ": " << desc << std::endl;
-        }
-
+        std::cout << "\n=== 任务处理器帮助 ===" << std::endl;
+        std::cout << "任务命令格式: task <任务名> [-参数1 值1] [-参数2 值2] ..." << std::endl;
+        std::cout << "支持的类型: 字符串、整数、浮点数、布尔值(true/1/yes/on)" << std::endl;
+        std::cout << "示例:" << std::endl;
+        std::cout << "  task copy -s /home/file.txt -d /backup/" << std::endl;
+        std::cout << "  task start -host 127.0.0.1 -port 8080 -debug true" << std::endl;
         std::cout << "\n特殊命令:" << std::endl;
-        std::cout << "  exit: 退出程序" << std::endl;
-        std::cout << "  help: 显示此帮助" << std::endl;
-        std::cout << "  list: 列出所有注册的命令" << std::endl;
-        std::cout << "================\n" << std::endl;
+        std::cout << "  exit  - 退出程序" << std::endl;
+        std::cout << "  help  - 显示此帮助" << std::endl;
+        std::cout << "  list  - 列出所有注册的任务" << std::endl;
+        std::cout << "================================\n" << std::endl;
     }
 
-    void listCommands() const
+    void listTasks() const
     {
-        std::cout << "\n已注册的命令 (" << callback_list_.size() << "):" << std::endl;
-        for (const auto& cmd : callback_list_ | std::views::keys)
+        std::cout << "\n已注册的任务 (" << tasks_.size() << "):" << std::endl;
+        for (const auto& [name, task] : tasks_)
         {
-            std::cout << "  - " << cmd;
-            if (descriptions_.contains(cmd))
+            std::cout << "  - " << name;
+            if (!task->getDescription().empty())
             {
-                std::cout << " (" << descriptions_.at(cmd) << ")";
+                std::cout << ": " << task->getDescription();
             }
             std::cout << std::endl;
         }
     }
 
 private:
-    bool                               is_running_ = true;
-    std::map<std::string, MsgCallback> callback_list_;
-    std::map<std::string, std::string> descriptions_;
+    bool                                         is_running_ = true;
+    std::map<std::string, std::unique_ptr<Task>> tasks_;
 };
 
 int main(int argc, char* argv[])
 {
-    /// 设置本地化（支持中文输出）
     setlocale(LC_ALL, "zh_CN.UTF-8");
 
-    XUserInput userinput;
+    XUserInput user_input;
 
-    /// 注册命令和参数
-    userinput.reg(
-                     "-s", [](const std::string& value) { std::cout << "[源路径] " << value << std::endl; },
-                     "设置源路径")
-            .reg(
-                    "-d", [](const std::string& value) { std::cout << "[目标路径] " << value << std::endl; },
-                    "设置目标路径")
-            .reg(
+    /// 示例1：支持类型的copy任务
+    user_input
+            .registerTask(
                     "copy",
-                    [](const std::string& args)
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
                     {
-                        if (args.empty())
-                        {
-                            std::cout << "copy命令需要参数，格式: copy -s 源路径 -d 目标路径" << std::endl;
-                        }
-                        else
-                        {
-                            std::cout << "执行复制操作: " << args << std::endl;
-                        }
+                        std::cout << "[复制操作]" << std::endl;
+                        auto src = params.at("-s").asString();
+                        auto dst = params.at("-d").asString();
+                        std::cout << "  从 " << src << " 复制到 " << dst << std::endl;
+                        /// 实际复制逻辑
                     },
                     "复制文件")
-            .reg(
-                    "move", [](const std::string& args) { std::cout << "执行移动操作: " << args << std::endl; },
-                    "移动文件")
-            .reg(
-                    "delete",
-                    [](const std::string& args)
+            .addStringParam("-s", "源文件路径", true)
+            .addStringParam("-d", "目标路径", true);
+
+    /// 示例2：数学计算任务（演示数值类型）
+    user_input
+            .registerTask(
+                    "calculate",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
                     {
-                        if (args.empty())
+                        std::cout << "[计算操作]" << std::endl;
+                        double x       = params.at("-x").asDouble();
+                        int    n       = params.at("-n").asInt();
+                        bool   verbose = params.contains("-v") ? params.at("-v").asBool() : false;
+
+                        double result = 1.0;
+                        for (int i = 0; i < n; ++i)
+                            result *= x;
+
+                        std::cout << "  结果: " << x << " ^ " << n << " = " << result << std::endl;
+                        if (verbose)
+                            std::cout << "  详细模式: 计算完成" << std::endl;
+                    },
+                    "数学计算")
+            .addDoubleParam("-x", "基数", true)
+            .addIntParam("-n", "指数", true)
+            .addBoolParam("-v", "详细模式", false);
+
+    /// 示例3：服务器启动任务（演示多种类型）
+    user_input
+            .registerTask(
+                    "start",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    {
+                        std::cout << "[启动服务器]" << std::endl;
+                        std::string host  = params.at("-host").asString();
+                        int         port  = params.at("-port").asInt();
+                        bool        debug = params.contains("-debug") ? params.at("-debug").asBool() : false;
+
+                        std::cout << "  主机: " << host << ":" << port << std::endl;
+                        std::cout << "  调试模式: " << (debug ? "开启" : "关闭") << std::endl;
+
+                        if (params.contains("-timeout"))
                         {
-                            std::cout << "警告: 删除操作需要指定目标!" << std::endl;
+                            double timeout = params.at("-timeout").asDouble();
+                            std::cout << "  超时设置: " << timeout << "秒" << std::endl;
+                        }
+                    },
+                    "启动服务器")
+            .addStringParam("-host", "主机地址", true)
+            .addIntParam("-port", "端口号", true)
+            .addBoolParam("-debug", "调试模式", false)
+            .addDoubleParam("-timeout", "超时时间(秒)", false);
+
+    /// 示例4：回显任务（保持简单）
+    user_input
+            .registerTask(
+                    "echo",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    {
+                        if (params.contains("-m"))
+                        {
+                            std::cout << "回显: " << params.at("-m").asString() << std::endl;
                         }
                         else
                         {
-                            std::cout << "删除: " << args << std::endl;
+                            std::cout << "(未指定消息，使用 -m 参数)" << std::endl;
                         }
                     },
-                    "删除文件")
-            .reg("echo", [](const std::string& args) { std::cout << "回显: " << args << std::endl; }, "回显输入的内容");
+                    "回显消息")
+            .addStringParam("-m", "要回显的消息", false);
 
-    std::cout << "=== 命令行处理器示例 ===" << std::endl;
+    std::cout << "=== 增强型任务处理器示例 ===" << std::endl;
+    std::cout << "支持参数类型: 字符串、整数、浮点数、布尔值" << std::endl;
     std::cout << "可以尝试以下命令:" << std::endl;
-    std::cout << "  1. 直接命令: echo Hello World" << std::endl;
-    std::cout << "  2. 参数命令: copy -s /path/src -d /path/dst" << std::endl;
-    std::cout << "  3. 仅参数: -s /tmp/file.txt" << std::endl;
-    std::cout << "  4. 帮助: help 或 list\n" << std::endl;
+    std::cout << "  1. task copy -s /home/file.txt -d /backup/" << std::endl;
+    std::cout << "  2. task calculate -x 2.5 -n 3 -v true" << std::endl;
+    std::cout << "  3. task start -host localhost -port 8080 -debug yes -timeout 30.5" << std::endl;
+    std::cout << "  4. task echo -m \"Hello World\"" << std::endl;
+    std::cout << "  5. help (查看帮助) 或 list (列出任务)\n" << std::endl;
 
-    userinput.start();
+    user_input.start();
 
     return 0;
 }
