@@ -113,7 +113,7 @@ public:
     };
 
 public:
-    void Write(const std::string& log, const std::string& file, const std::string& line) const
+    void Write(const std::string& log, const XLog& level, const char* file, int line) const
     {
         // auto format_log = formater_->Format(log_level_, log, file, line);
 
@@ -235,11 +235,11 @@ private: /// 单件构造放私有
 };
 
 /// 设置等级之类的
-#define XLOGOUT(l, s) LogFac::Instance().logger().Write(l, s, __FILE__, __LINE__)
-#define LOGDEBUG(s)   XLOGOUT(Logger::DEBUG, s)
-#define LOGINFO(s)    XLOGOUT(Logger::INFO, s)
-#define LOGERROR(s)   XLOGOUT(Logger::ERROR, s)
-#define LOGFATAL(s)   XLOGOUT(Logger::FATAL, s)
+#define XLOGOUT(l, s) LogFac::Instance().logger().Write(s, l, __FILE__, __LINE__)
+#define LOGDEBUG(s)   XLOGOUT(Logger::XLog::DEBUG, s)
+#define LOGINFO(s)    XLOGOUT(Logger::XLog::INFO, s)
+#define LOGERROR(s)   XLOGOUT(Logger::XLog::ERROR, s)
+#define LOGFATAL(s)   XLOGOUT(Logger::XLog::FATAL, s)
 
 int main()
 {
