@@ -236,10 +236,10 @@ private: /// 单件构造放私有
 
 /// 设置等级之类的
 #define XLOGOUT(l, s) LogFac::Instance().logger().Write(l, s, __FILE__, __LINE__)
-#define LOGDEBUG(s)   XLOGOUT(XLog::DEBUG, s)
-#define LOGINFO(s)    XLOGOUT(XLog::INFO, s)
-#define LOGERROR(s)   XLOGOUT(XLog::ERROR, s)
-#define LOGFATAL(s)   XLOGOUT(XLog::FATAL, s)
+#define LOGDEBUG(s)   XLOGOUT(Logger::DEBUG, s)
+#define LOGINFO(s)    XLOGOUT(Logger::INFO, s)
+#define LOGERROR(s)   XLOGOUT(Logger::ERROR, s)
+#define LOGFATAL(s)   XLOGOUT(Logger::FATAL, s)
 
 int main()
 {
