@@ -69,11 +69,22 @@ message("OpenCV_VERSION = ${OpenCV_VERSION}")
 message("OpenCV_LIBS = ${OpenCV_LIBS}")
 
 # ffmepg
-find_package(FFMPEG REQUIRED)
-message("FFMPEG_FOUND = ${FFMPEG_FOUND}")
+# find_package(FFMPEG REQUIRED)
+# message("FFMPEG_FOUND = ${FFMPEG_FOUND}")
 # message("FFMPEG_LIBRARIES = ${FFMPEG_LIBRARIES}")
 # message("FFMPEG_LIBRARY_DIRS = ${FFMPEG_LIBRARY_DIRS}")
 # message("FFMPEG_INCLUDE_DIRS = ${FFMPEG_INCLUDE_DIRS}")
+
+# 查找FFmpeg可执行文件
+find_program(FFMPEG_EXECUTABLE ffmpeg)
+
+if(FFMPEG_EXECUTABLE)
+    message(STATUS "找到 FFmpeg: ${FFMPEG_EXECUTABLE}")
+    # 你可以将路径传递给C++源代码
+    add_definitions(-DFFMPEG_PATH="${FFMPEG_EXECUTABLE}")
+else()
+    message(WARNING "未找到 ffmpeg 可执行文件。请安装或手动指定路径。")
+endif()
 
 #==================================================================================#
 

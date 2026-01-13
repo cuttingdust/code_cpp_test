@@ -4,6 +4,9 @@
 	"dependencies": [
 		"fmt",
 		"opencv",
-		"ffmpeg"
+		{
+			"name": "ffmpeg",
+			"features": ["ffmpeg"] 
+		}
 	]
 }
