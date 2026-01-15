@@ -1,6 +1,7 @@
 ﻿#include "XUserInput.h"
 
 #include "linenoise.hpp"
+#include "TaskFacory.h"
 
 #include <ranges>
 #include <vector>
@@ -94,12 +95,12 @@ static auto split(const std::string &input, const std::string &delimiter, bool t
     return ret;
 }
 
-static bool                                          gIsRunning = true;
-static std::map<std::string, std::unique_ptr<XTask>> gTasks;
+static bool                              gIsRunning = true;
+static std::map<std::string, XTask::Ptr> gTasks;
 
 //////////////////////////////////////////////////////////////////
 
-// 补全回调函数的实现
+/// 补全回调函数的实现
 void completionCallback(const char *prefix, std::vector<std::string> &completions)
 {
     std::string input(prefix);
@@ -119,7 +120,7 @@ void completionCallback(const char *prefix, std::vector<std::string> &completion
     /// 2. 过滤：命令是否以用户输入开头？
     for (const auto &cmd : allCommands)
     {
-        if (cmd.find(input) == 0)
+        if (cmd.starts_with(input))
         {
             completions.push_back(cmd);
         }
@@ -128,7 +129,7 @@ void completionCallback(const char *prefix, std::vector<std::string> &completion
     /// 3. 特殊情况：如果用户输入正好是 "task"，额外建议 "task "（带空格）
     if (input == "task")
     {
-        completions.push_back("task ");
+        completions.emplace_back("task ");
     }
 }
 
@@ -181,7 +182,7 @@ auto XUserInput::stop() -> void
 auto XUserInput::registerTask(const std::string &name, const XTask::TaskFunc &func, const std::string &description)
         -> XTask &
 {
-    auto  task    = std::make_unique<XTask>(name, func, description);
+    auto  task    = TaskFac->createTask(name, func, description);
     auto &taskRef = *task;
     gTasks[name]  = std::move(task);
     return taskRef;

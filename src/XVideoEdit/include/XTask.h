@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "ITask.h"
 #include "Parameter.h"
 #include "ParameterValue.h"
 
@@ -8,13 +9,14 @@
 
 
 /// 任务定义类
-class XTask
+class XTask : public ITask
 {
+    DECLARE_CREATE_DEFAULT(XTask)
 public:
     using TaskFunc = std::function<void(const std::map<std::string, ParameterValue>&)>;
-
+    explicit XTask();
     explicit XTask(const std::string_view& name, TaskFunc func, const std::string_view& desc = "");
-    virtual ~XTask();
+    ~XTask() override;
 
     XTask(XTask&&) noexcept;
     XTask& operator=(XTask&&) noexcept;
@@ -38,13 +40,18 @@ public:
 
 public:
     /// 执行任务（带参数验证和类型检查）
-    auto execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool;
+    auto execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool override;
 
     auto getName() const -> const std::string&;
 
     auto getDescription() const -> const std::string&;
 
     auto getParameters() const -> const std::vector<Parameter>&;
+
+public:
+    auto setName(const std::string_view& name) const -> void;
+
+    auto setDescription(const std::string_view& desc) const -> void;
 
 private:
     class PImpl;

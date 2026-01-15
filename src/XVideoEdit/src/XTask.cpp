@@ -1,5 +1,7 @@
 ﻿#include "XTask.h"
 
+#include "ITask.h"
+
 #include <utility>
 
 
@@ -19,6 +21,10 @@ public:
 
 XTask::PImpl::PImpl(XTask *owenr, const std::string_view &name, TaskFunc func, const std::string_view &desc) :
     owenr_(owenr), name_(name), func_(std::move(func)), description_(desc)
+{
+}
+
+XTask::XTask()
 {
 }
 
@@ -139,3 +145,17 @@ auto XTask::getParameters() const -> const std::vector<Parameter> &
 {
     return impl_->parameters_;
 }
+
+auto XTask::setName(const std::string_view &name) const -> void
+{
+    impl_->name_ = name;
+}
+
+auto XTask::setDescription(const std::string_view &desc) const -> void
+{
+    impl_->description_ = desc;
+}
+
+
+IMPLEMENT_CREATE_DEFAULT(XTask)
+template auto XTask::create(const std::string_view &, const TaskFunc &, const std::string_view &) -> XTask::Ptr;

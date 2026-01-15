@@ -23,12 +23,13 @@ public:                                     \
     }
 
 #define IMPLEMENT_CREATE_DEFAULT(ClassName)                              \
-    auto ClassName::create() -> ClassName::Ptr                           \
+    inline auto ClassName::create() -> ClassName::Ptr                    \
     {                                                                    \
         return std::make_shared<ClassName>();                            \
     }                                                                    \
     template <typename... Args>                                          \
-    auto ClassName::create(Args &&...args) -> ClassName::Ptr             \
+    inline auto ClassName::create(Args &&...args) -> ClassName::Ptr      \
     {                                                                    \
         return std::make_shared<ClassName>(std::forward<Args>(args)...); \
     }
+\
