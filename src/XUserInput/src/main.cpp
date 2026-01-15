@@ -242,8 +242,8 @@ public:
     public:
         using TaskFunc = std::function<void(const std::map<std::string, ParameterValue>&)>;
 
-        Task(const std::string_view& name, const TaskFunc& func, const std::string_view& desc = "") :
-            name_(name), func_(func), description_(desc)
+        Task(const std::string_view& name, TaskFunc func, const std::string_view& desc = "") :
+            name_(name), func_(std::move(func)), description_(desc)
         {
         }
 
@@ -311,14 +311,11 @@ public:
                         switch (paramIt->getType())
                         {
                             case Parameter::Type::Int:
-                                typedParams[key].asInt(); /// 测试转换
-                                break;
+                                return typedParams[key].asInt(); /// 测试转换
                             case Parameter::Type::Double:
-                                typedParams[key].asDouble(); /// 测试转换
-                                break;
+                                return typedParams[key].asDouble(); /// 测试转换
                             case Parameter::Type::Bool:
-                                typedParams[key].asBool(); /// 测试转换
-                                break;
+                                return typedParams[key].asBool(); /// 测试转换
                             case Parameter::Type::String:
                             default:
                                 break; /// 字符串无需特殊验证
@@ -414,7 +411,7 @@ public:
     }
 
     /// 注册任务（返回Task引用以便链式添加参数）
-    Task& registerTask(const std::string& name, Task::TaskFunc func, const std::string& description = "")
+    Task& registerTask(const std::string& name, const Task::TaskFunc& func, const std::string& description = "")
     {
         auto  task    = std::make_unique<Task>(name, func, description);
         auto& taskRef = *task;

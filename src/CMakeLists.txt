@@ -77,13 +77,22 @@ message("OpenCV_LIBS = ${OpenCV_LIBS}")
 
 # 查找FFmpeg可执行文件
 find_program(FFMPEG_EXECUTABLE ffmpeg)
-
 if(FFMPEG_EXECUTABLE)
     message(STATUS "找到 FFmpeg: ${FFMPEG_EXECUTABLE}")
     # 你可以将路径传递给C++源代码
     add_definitions(-DFFMPEG_PATH="${FFMPEG_EXECUTABLE}")
 else()
     message(WARNING "未找到 ffmpeg 可执行文件。请安装或手动指定路径。")
+endif()
+
+# 查找FFplay可执行文件
+find_program(FFPLAY_EXECUTABLE ffplay)
+if(FFPLAY_EXECUTABLE)
+    message(STATUS "找到 FFPlay: ${FFPLAY_EXECUTABLE}")
+    # 你可以将路径传递给C++源代码
+    add_definitions(-DFFPLAY_PATH="${FFPLAY_EXECUTABLE}")
+else()
+    message(WARNING "未找到 ffplay 可执行文件。请安装或手动指定路径。")
 endif()
 
 #==================================================================================#
