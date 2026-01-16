@@ -30,7 +30,6 @@ ParameterValue::PImpl::PImpl(ParameterValue *owenr, const char *v) : owenr_(owen
 }
 
 ParameterValue::ParameterValue() : impl_(std::make_unique<PImpl>(this))
-
 {
 }
 
@@ -45,6 +44,36 @@ ParameterValue::ParameterValue(const char *value) : impl_(std::make_unique<PImpl
 ParameterValue::~ParameterValue()                                     = default;
 ParameterValue::ParameterValue(ParameterValue &&) noexcept            = default;
 ParameterValue &ParameterValue::operator=(ParameterValue &&) noexcept = default;
+
+
+/// 拷贝构造函数实现
+ParameterValue::ParameterValue(const ParameterValue &other) :
+    impl_(other.impl_ ? std::make_unique<PImpl>(*other.impl_) : nullptr)
+{
+    /// 更新owner_指针指向当前对象
+    if (impl_)
+    {
+        impl_->owenr_ = this;
+    }
+}
+
+/// 拷贝赋值运算符
+auto ParameterValue::operator=(const ParameterValue &other) -> ParameterValue &
+{
+    if (this != &other)
+    {
+        if (other.impl_)
+        {
+            impl_         = std::make_unique<PImpl>(*other.impl_);
+            impl_->owenr_ = this; /// 更新owner_指针
+        }
+        else
+        {
+            impl_.reset();
+        }
+    }
+    return *this;
+}
 
 auto ParameterValue::asString() const -> const std::string &
 {

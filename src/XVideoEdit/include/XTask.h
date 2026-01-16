@@ -6,7 +6,7 @@
 
 #include <functional>
 #include <map>
-
+#include <optional>
 
 /// 任务定义类
 class XTask : public ITask
@@ -46,7 +46,18 @@ public:
 
     auto getDescription() const -> const std::string&;
 
-    auto getParameters() const -> const std::vector<Parameter>&;
+    auto getParameters() const -> const Parameter::Container&;
+
+    auto hasParameter(const Parameter& parameter) const -> bool;
+
+    auto hasParameter(const std::string_view& parameter) const -> bool;
+
+    auto getRequiredParam(const std::map<std::string, std::string>& params, const std::string& key,
+                          std::string& errorMsg) const -> std::string;
+
+    auto getParameter(const std::string& key, std::string& errorMsg) const -> ParameterValue;
+
+    auto getFFmpegPath() const -> std::string;
 
 public:
     auto setName(const std::string_view& name) const -> void;

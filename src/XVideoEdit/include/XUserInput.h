@@ -1,36 +1,34 @@
 ﻿#pragma once
 
-#include "Parameter.h"
-#include "ParameterValue.h"
 #include "XTask.h"
 
 class XUserInput
 {
 public:
+    XUserInput();
+    ~XUserInput();
+
     using Parameter      = ::Parameter;
     using ParameterValue = ::ParameterValue;
 
 public:
     auto start() -> void;
-
     auto stop() -> void;
 
-    /// 注册任务（返回Task引用以便链式添加参数）
-    auto registerTask(const std::string& name, const XTask::TaskFunc& func, const std::string& description = "")
-            -> XTask&;
+    auto registerTask(const std::string &name, const XTask::TaskFunc &func, const std::string &description = "")
+            -> XTask &;
 
 private:
-    auto handleCommand(const std::string& input) -> void;
-
-    /// 主命令处理函数
-    auto processCommand(const std::string& input) -> void;
-
-    /// 解析并执行任务命令
-    auto processTaskCommand(const std::string& input) -> void;
-
-    auto printTaskUsage(const std::string& taskName) const -> void;
+    auto handleCommand(const std::string &input) -> void;
+    auto processCommand(const std::string &input) -> void;
+    auto processTaskCommand(const std::string &input) -> void;
 
     auto printHelp() const -> void;
-
     auto listTasks() const -> void;
+    auto printTaskUsage(const std::string &taskName) const -> void;
+
+private:
+    /// 内部实现类
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };

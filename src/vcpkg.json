@@ -6,7 +6,7 @@
 		"opencv",
 		{
 			"name": "ffmpeg",
-			"features": ["ffmpeg", "ffplay"] 
+			"features": ["ffmpeg", "ffplay", "ffprobe"] 
 		}
 	]
 }

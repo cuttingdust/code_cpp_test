@@ -2,6 +2,9 @@
 
 #include "XConst.h"
 
+#include <vector>
+#include <optional>
+
 /// 参数定义类
 class Parameter
 {
@@ -13,14 +16,21 @@ public:
         Double,
         Bool
     };
+    using Container = std::vector<Parameter>;
+    using Optional  = std::optional<Parameter>;
 
     Parameter(const std::string_view& name, Type type = Type::String, const std::string_view& desc = "",
               bool required = false);
     ~Parameter();
 
+    Parameter(const Parameter& other);
+    auto operator=(const Parameter& other) -> Parameter&;
+
     /// 允许移动
     Parameter(Parameter&&) noexcept;
-    Parameter& operator=(Parameter&&) noexcept;
+    auto operator=(Parameter&&) noexcept -> Parameter&;
+    auto operator==(const Parameter& other) const -> bool;
+    auto operator==(const std::string_view& name) const -> bool;
 
 public:
     auto getName() const -> const std::string&;

@@ -5,6 +5,7 @@ project(${CURRENT_DIR})
 
 set(DPS_LIBRARYS
    ${FFT_MOUDLES}
+   replxx::replxx
 )
 
 cpp_execute(${PROJECT_NAME})

@@ -30,9 +30,49 @@ Parameter::Parameter(const std::string_view &name, Type type, const std::string_
 {
 }
 
-Parameter::~Parameter()                                = default;
-Parameter::Parameter(Parameter &&) noexcept            = default;
-Parameter &Parameter::operator=(Parameter &&) noexcept = default;
+Parameter::~Parameter() = default;
+
+Parameter::Parameter(Parameter &&) noexcept                     = default;
+auto Parameter::operator=(Parameter &&) noexcept -> Parameter & = default;
+
+/// 拷贝构造函数实现
+Parameter::Parameter(const Parameter &other) : impl_(other.impl_ ? std::make_unique<PImpl>(*other.impl_) : nullptr)
+{
+    /// 更新owner_指针指向当前对象
+    if (impl_)
+    {
+        impl_->owenr_ = this;
+    }
+}
+
+/// 拷贝赋值运算符
+auto Parameter::operator=(const Parameter &other) -> Parameter &
+{
+    if (this != &other)
+    {
+        if (other.impl_)
+        {
+            impl_         = std::make_unique<PImpl>(*other.impl_);
+            impl_->owenr_ = this; /// 更新owner_指针
+        }
+        else
+        {
+            impl_.reset();
+        }
+    }
+    return *this;
+}
+
+
+auto Parameter::operator==(const Parameter &other) const -> bool
+{
+    return getName() == other.getName();
+}
+
+auto Parameter::operator==(const std::string_view &name) const -> bool
+{
+    return getName() == name;
+}
 
 auto Parameter::getName() const -> const std::string &
 {

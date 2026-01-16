@@ -2,6 +2,7 @@
 
 #include "ITask.h"
 
+#include <stdexcept>
 #include <utility>
 
 
@@ -12,11 +13,12 @@ public:
     ~PImpl() = default;
 
 public:
-    XTask                 *owenr_ = nullptr;
-    std::string            name_;
-    TaskFunc               func_;
-    std::string            description_;
-    std::vector<Parameter> parameters_;
+    XTask                                *owenr_ = nullptr;
+    std::string                           name_;
+    TaskFunc                              func_;
+    std::string                           description_;
+    std::vector<Parameter>                parameters_;
+    std::map<std::string, ParameterValue> parameterList_;
 };
 
 XTask::PImpl::PImpl(XTask *owenr, const std::string_view &name, TaskFunc func, const std::string_view &desc) :
@@ -129,6 +131,8 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
         errorMsg = "执行错误: " + std::string(e.what());
         return false;
     }
+
+    impl_->parameterList_ = typedParams;
 }
 
 auto XTask::getName() const -> const std::string &
@@ -141,9 +145,52 @@ auto XTask::getDescription() const -> const std::string &
     return impl_->description_;
 }
 
-auto XTask::getParameters() const -> const std::vector<Parameter> &
+auto XTask::getParameters() const -> const Parameter::Container &
 {
     return impl_->parameters_;
+}
+
+auto XTask::hasParameter(const Parameter &parameter) const -> bool
+{
+    /// 比较参数名称，因为参数名称应该是唯一的
+    return std::ranges::find(impl_->parameters_, parameter) != impl_->parameters_.end();
+}
+
+auto XTask::hasParameter(const std::string_view &parameter) const -> bool
+{
+    return std::ranges::find(impl_->parameters_, parameter) != impl_->parameters_.end();
+}
+
+auto XTask::getRequiredParam(const std::map<std::string, std::string> &params, const std::string &key,
+                             std::string &errorMsg) const -> std::string
+{
+    auto it = params.find(key);
+    if (it == params.end())
+    {
+        errorMsg = "缺少必要参数: " + key;
+        return "";
+    }
+    return it->second;
+}
+
+auto XTask::getParameter(const std::string &key, std::string &errorMsg) const -> ParameterValue
+{
+    auto it = impl_->parameterList_.find(key);
+    if (it == impl_->parameterList_.end())
+    {
+        errorMsg = "缺少必要参数: " + key;
+        return "";
+    }
+    return it->second;
+}
+
+auto XTask::getFFmpegPath() const -> std::string
+{
+#ifdef FFMPEG_PATH
+    return FFMPEG_PATH;
+#else
+    return "ffmpeg";
+#endif
 }
 
 auto XTask::setName(const std::string_view &name) const -> void

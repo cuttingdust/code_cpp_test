@@ -55,12 +55,17 @@ endif()
 # message("Python3_VERSION = ${Python3_VERSION}")
 # message("Python3_LIBS = ${Python3_LIBRARIES}")
 #==================================================================================#
-
 # fmt
 find_package(fmt CONFIG REQUIRED)
 message("fmt_FOUND = ${OpenCV_FOUND}")
 message("fmt_VERSION = ${OpenCV_VERSION}")
 message("fmt_LIBS = ${OpenCV_LIBS}")
+
+# replxx
+find_package(replxx CONFIG REQUIRED)
+message("replxx_FOUND = ${replxx_FOUND}")
+message("replxx_VERSION = ${replxx_VERSION}")
+message("replxx_LIBS = ${replxx_LIBS}")
 
 # OpenCV
 find_package(OpenCV CONFIG REQUIRED)
@@ -93,6 +98,15 @@ if(FFPLAY_EXECUTABLE)
     add_definitions(-DFFPLAY_PATH="${FFPLAY_EXECUTABLE}")
 else()
     message(WARNING "未找到 ffplay 可执行文件。请安装或手动指定路径。")
+endif()
+
+find_program(FFPROBE_EXECUTABLE ffprobe)
+if(FFPROBE_EXECUTABLE)
+    message(STATUS "找到 FFprobe: ${FFPROBE_EXECUTABLE}")
+    # 你可以将路径传递给C++源代码
+    add_definitions(-DFFPROBE_PATH="${FFPROBE_EXECUTABLE}")
+else()
+    message(WARNING "未找到 ffprobe 可执行文件。请安装或手动指定路径。")
 endif()
 
 #==================================================================================#

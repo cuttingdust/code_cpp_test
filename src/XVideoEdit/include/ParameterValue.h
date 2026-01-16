@@ -12,6 +12,10 @@ public:
     ParameterValue(const char* value);
     ~ParameterValue();
 
+    /// 允许拷贝
+    ParameterValue(const ParameterValue& other);
+    auto operator=(const ParameterValue& other) -> ParameterValue&;
+
     /// 允许移动
     ParameterValue(ParameterValue&&) noexcept;
     ParameterValue& operator=(ParameterValue&&) noexcept;

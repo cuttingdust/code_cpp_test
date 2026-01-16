@@ -1,6 +1,6 @@
 ﻿#include "TaskFacory.h"
 
-#include "FFTask.h"
+#include "CVTask.h"
 
 auto TackFactory::createTask(const std::string_view &name, const XTask::TaskFunc &func,
                              const std::string_view &description) -> XTask::Ptr
@@ -8,7 +8,7 @@ auto TackFactory::createTask(const std::string_view &name, const XTask::TaskFunc
     XTask::Ptr task = nullptr;
     if (name == "cv")
     {
-        task = FFTask::create(name, func, description);
+        task = CVTask::create(name, func, description);
     }
     else
     {

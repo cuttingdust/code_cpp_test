@@ -1,10 +1,15 @@
-﻿#include "XUserInput.h"
+#include "XUserInput.h"
 
 #include <iostream>
+#include <Windows.h>
 
 int main(int argc, char* argv[])
 {
     setlocale(LC_ALL, "zh_CN.UTF-8");
+    // // 设置控制台输入输出编码为UTF-8
+    // SetConsoleOutputCP(CP_UTF8);
+    // SetConsoleCP(CP_UTF8);
+
 
     XUserInput user_input;
 
@@ -91,6 +96,20 @@ int main(int argc, char* argv[])
                     },
                     "回显消息")
             .addStringParam("-m", "要回显的消息", false);
+
+    user_input
+            .registerTask(
+                    "cv",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    {
+                        std::cout << "[转码操作]" << std::endl;
+                        auto src = params.at("--input").asString();
+                        auto dst = params.at("--output").asString();
+                        std::cout << "  从 " << src << " 转码到 " << dst << std::endl;
+                    },
+                    "转码视频文件")
+            .addStringParam("--input", "源文件路径", true)
+            .addStringParam("--output", "目标路径", true);
 
     std::cout << "=== 增强型任务处理器示例 ===" << std::endl;
     std::cout << "支持参数类型: 字符串、整数、浮点数、布尔值" << std::endl;
