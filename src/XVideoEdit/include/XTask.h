@@ -24,19 +24,30 @@ public:
 public:
     /// 为任务添加参数定义（支持指定类型）
     auto addParameter(const std::string& paramName, Parameter::Type type = Parameter::Type::String,
-                      const std::string& desc = "", bool required = false) -> XTask&;
+                      const std::string& desc = "", bool required = false,
+                      Parameter::CompletionFunc completor = nullptr) -> XTask&;
 
     /// 便捷方法：添加字符串参数
-    auto addStringParam(const std::string& paramName, const std::string& desc = "", bool required = false) -> XTask&;
+    auto addStringParam(const std::string& paramName, const std::string& desc = "", bool required = false,
+                        Parameter::CompletionFunc completor = nullptr) -> XTask&;
 
     /// 便捷方法：添加整数参数
-    auto addIntParam(const std::string& paramName, const std::string& desc = "", bool required = false) -> XTask&;
+    auto addIntParam(const std::string& paramName, const std::string& desc = "", bool required = false,
+                     Parameter::CompletionFunc completor = nullptr) -> XTask&;
 
     /// 便捷方法：添加浮点数参数
-    auto addDoubleParam(const std::string& paramName, const std::string& desc = "", bool required = false) -> XTask&;
+    auto addDoubleParam(const std::string& paramName, const std::string& desc = "", bool required = false,
+                        Parameter::CompletionFunc completor = nullptr) -> XTask&;
 
     /// 便捷方法：添加布尔参数
-    auto addBoolParam(const std::string& paramName, const std::string& desc = "", bool required = false) -> XTask&;
+    auto addBoolParam(const std::string& paramName, const std::string& desc = "", bool required = false,
+                      Parameter::CompletionFunc completor = nullptr) -> XTask&;
+
+    auto addFileParam(const std::string &       paramName, const std::string &desc, bool required,
+                      Parameter::CompletionFunc completor = nullptr) -> XTask &;
+
+    auto addDirectoryParam(const std::string &       paramName, const std::string &desc, bool required,
+                           Parameter::CompletionFunc completor = nullptr) -> XTask &;
 
 public:
     /// 执行任务（带参数验证和类型检查）

@@ -39,31 +39,52 @@ XTask::~XTask()                            = default;
 XTask::XTask(XTask &&) noexcept            = default;
 XTask &XTask::operator=(XTask &&) noexcept = default;
 
-auto XTask::addParameter(const std::string &paramName, Parameter::Type type, const std::string &desc, bool required)
-        -> XTask &
+XTask &XTask::addParameter(const std::string &paramName, Parameter::Type type, const std::string &desc, bool required,
+                           Parameter::CompletionFunc completor)
 {
-    impl_->parameters_.emplace_back(paramName, type, desc, required);
+    auto param = Parameter(paramName, type, desc, required);
+    if (completor)
+    {
+        param.setCompletions(std::move(completor));
+    }
+    impl_->parameters_.push_back(std::move(param));
     return *this;
 }
 
-auto XTask::addStringParam(const std::string &paramName, const std::string &desc, bool required) -> XTask &
+XTask &XTask::addStringParam(const std::string &paramName, const std::string &desc, bool required,
+                             Parameter::CompletionFunc completor)
 {
-    return addParameter(paramName, Parameter::Type::String, desc, required);
+    return addParameter(paramName, Parameter::Type::String, desc, required, std::move(completor));
 }
 
-auto XTask::addIntParam(const std::string &paramName, const std::string &desc, bool required) -> XTask &
+XTask &XTask::addIntParam(const std::string &paramName, const std::string &desc, bool required,
+                          Parameter::CompletionFunc completor)
 {
-    return addParameter(paramName, Parameter::Type::Int, desc, required);
+    return addParameter(paramName, Parameter::Type::Int, desc, required, std::move(completor));
 }
 
-auto XTask::addDoubleParam(const std::string &paramName, const std::string &desc, bool required) -> XTask &
+XTask &XTask::addDoubleParam(const std::string &paramName, const std::string &desc, bool required,
+                             Parameter::CompletionFunc completor)
 {
-    return addParameter(paramName, Parameter::Type::Double, desc, required);
+    return addParameter(paramName, Parameter::Type::Double, desc, required, std::move(completor));
 }
 
-auto XTask::addBoolParam(const std::string &paramName, const std::string &desc, bool required) -> XTask &
+XTask &XTask::addBoolParam(const std::string &paramName, const std::string &desc, bool required,
+                           Parameter::CompletionFunc completor)
 {
-    return addParameter(paramName, Parameter::Type::Bool, desc, required);
+    return addParameter(paramName, Parameter::Type::Bool, desc, required, std::move(completor));
+}
+
+auto XTask::addFileParam(const std::string &paramName, const std::string &desc, bool required,
+        Parameter::CompletionFunc completor) -> XTask &
+{
+    return addParameter(paramName, Parameter::Type::File, desc, required, std::move(completor));
+}
+
+auto XTask::addDirectoryParam(const std::string &paramName, const std::string &desc, bool required,
+        Parameter::CompletionFunc completor) -> XTask &
+{
+    return addParameter(paramName, Parameter::Type::Directory, desc, required, std::move(completor));
 }
 
 auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::string &errorMsg) const -> bool
@@ -79,7 +100,7 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
     }
 
     /// 2. 类型检查和转换
-    std::map<std::string, ParameterValue> typedParams;
+    impl_->parameterList_.clear(); // 清空之前的结果
     for (const auto &[key, strValue] : inputParams)
     {
         /// 查找参数定义
@@ -89,7 +110,7 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
         if (paramIt != impl_->parameters_.end())
         {
             /// 有定义的类型参数，创建ParameterValue
-            typedParams[key] = ParameterValue(strValue);
+            ParameterValue typedValue(strValue);
 
             /// 类型验证（简单版，实际执行时转换）
             try
@@ -97,15 +118,19 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
                 switch (paramIt->getType())
                 {
                     case Parameter::Type::Int:
-                        return typedParams[key].asInt(); /// 测试转换
+                        typedValue.asInt(); /// 测试转换
+                        break;
                     case Parameter::Type::Double:
-                        return typedParams[key].asDouble(); /// 测试转换
+                        typedValue.asDouble(); /// 测试转换
+                        break;
                     case Parameter::Type::Bool:
-                        return typedParams[key].asBool(); /// 测试转换
+                        typedValue.asBool(); /// 测试转换
+                        break;
                     case Parameter::Type::String:
                     default:
                         break; /// 字符串无需特殊验证
                 }
+                impl_->parameterList_[key] = typedValue;
             }
             catch (const std::exception &e)
             {
@@ -116,14 +141,14 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
         else
         {
             /// 未定义类型的参数，按字符串处理
-            typedParams[key] = ParameterValue(strValue);
+            impl_->parameterList_[key] = ParameterValue(strValue);
         }
     }
 
     /// 3. 执行任务
     try
     {
-        impl_->func_(typedParams);
+        impl_->func_(impl_->parameterList_);
         return true;
     }
     catch (const std::exception &e)
@@ -131,10 +156,7 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
         errorMsg = "执行错误: " + std::string(e.what());
         return false;
     }
-
-    impl_->parameterList_ = typedParams;
 }
-
 auto XTask::getName() const -> const std::string &
 {
     return impl_->name_;
