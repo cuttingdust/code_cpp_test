@@ -1,5 +1,4 @@
 ﻿#pragma once
-
 #include "XTask.h"
 
 class XUserInput
@@ -17,15 +16,6 @@ public:
 
     auto registerTask(const std::string &name, const XTask::TaskFunc &func, const std::string &description = "")
             -> XTask &;
-
-private:
-    auto handleCommand(const std::string &input) -> void;
-    auto processCommand(const std::string &input) -> void;
-    auto processTaskCommand(const std::string &input) -> void;
-
-    auto printHelp() const -> void;
-    auto listTasks() const -> void;
-    auto printTaskUsage(const std::string &taskName) const -> void;
 
 private:
     /// 内部实现类

@@ -6,10 +6,6 @@
 int main(int argc, char* argv[])
 {
     setlocale(LC_ALL, "zh_CN.UTF-8");
-    // // 设置控制台输入输出编码为UTF-8
-    // SetConsoleOutputCP(CP_UTF8);
-    // SetConsoleCP(CP_UTF8);
-
 
     XUserInput user_input;
 
