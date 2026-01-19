@@ -13,7 +13,8 @@ class XTask : public ITask
 {
     DECLARE_CREATE_DEFAULT(XTask)
 public:
-    using TaskFunc = std::function<void(const std::map<std::string, ParameterValue>&)>;
+    using TaskFunc         = std::function<void(const std::map<std::string, ParameterValue>&)>;
+    using ProgressCallback = std::function<void(float percent, const std::string& timeInfo)>;
     explicit XTask();
     explicit XTask(const std::string_view& name, TaskFunc func, const std::string_view& desc = "");
     ~XTask() override;
@@ -43,11 +44,11 @@ public:
     auto addBoolParam(const std::string& paramName, const std::string& desc = "", bool required = false,
                       Parameter::CompletionFunc completor = nullptr) -> XTask&;
 
-    auto addFileParam(const std::string &       paramName, const std::string &desc, bool required,
-                      Parameter::CompletionFunc completor = nullptr) -> XTask &;
+    auto addFileParam(const std::string& paramName, const std::string& desc, bool required,
+                      Parameter::CompletionFunc completor = nullptr) -> XTask&;
 
-    auto addDirectoryParam(const std::string &       paramName, const std::string &desc, bool required,
-                           Parameter::CompletionFunc completor = nullptr) -> XTask &;
+    auto addDirectoryParam(const std::string& paramName, const std::string& desc, bool required,
+                           Parameter::CompletionFunc completor = nullptr) -> XTask&;
 
 public:
     /// 执行任务（带参数验证和类型检查）
@@ -69,6 +70,10 @@ public:
     auto getParameter(const std::string& key, std::string& errorMsg) const -> ParameterValue;
 
     auto getFFmpegPath() const -> std::string;
+
+    void setProgressCallback(ProgressCallback callback) const;
+
+    auto getProgressCallback() const -> ProgressCallback;
 
 public:
     auto setName(const std::string_view& name) const -> void;

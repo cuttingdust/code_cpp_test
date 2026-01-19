@@ -1,39 +1,45 @@
 ﻿#include "CVTask.h"
 #include "XExec.h"
 #include "VideoFileValidator.h"
+#include "TaskProgressBar.h"
+#include "XFile.h"
 
 #include <filesystem>
 #include <iostream>
 #include <thread>
+#include <regex>
+#include <chrono>
+#include <sstream>
+#include <memory>
 
-class CVTask::PImpl
+class CVTask::Impl
 {
 public:
-    PImpl(CVTask *owenr);
-    ~PImpl() = default;
+    Impl(CVTask* owner);
+    ~Impl() = default;
 
 public:
-    CVTask *owenr_ = nullptr;
+    CVTask* owner_ = nullptr;
 };
 
-CVTask::PImpl::PImpl(CVTask *owenr) : owenr_(owenr)
+CVTask::Impl::Impl(CVTask* owner) : owner_(owner)
 {
 }
-
 
 CVTask::CVTask()
 {
     this->setTaskType(TaskType::TT_VIDEO);
+    impl_ = std::make_unique<CVTask::Impl>(this);
 }
 
-CVTask::CVTask(const std::string_view &name, const TaskFunc &func, const std::string_view &desc) :
-    XTask(name, func, desc), impl_(std::make_unique<CVTask::PImpl>(this))
+CVTask::CVTask(const std::string_view& name, const TaskFunc& func, const std::string_view& desc) :
+    XTask(name, func, desc), impl_(std::make_unique<CVTask::Impl>(this))
 {
 }
 
 CVTask::~CVTask() = default;
 
-auto CVTask::execute(const std::map<std::string, std::string> &inputParams, std::string &errorMsg) const -> bool
+auto CVTask::execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool
 {
     /// 1. 参数验证
     if (!XTask::execute(inputParams, errorMsg))
@@ -50,6 +56,7 @@ auto CVTask::execute(const std::map<std::string, std::string> &inputParams, std:
     {
         return false;
     }
+
     /// 3. 文件系统检查
     if (!validatePaths(srcPath, dstPath, errorMsg))
     {
@@ -64,23 +71,24 @@ auto CVTask::execute(const std::map<std::string, std::string> &inputParams, std:
 
     /// 5. 构建FFmpeg命令
     std::string command = buildFFmpegCommand(ffmpegPath, srcPath, dstPath, inputParams);
-    std::cout << "执行命令: " << command << std::endl;
+    // std::cout << "执行命令: " << command << std::endl;
 
     /// 6. 执行命令
-    return executeFFmpegCommand(command, dstPath, errorMsg);
+    return executeFFmpegCommand(command, srcPath, dstPath, errorMsg);
 }
 
 /// 检查是否为视频文件
-auto CVTask::isVideoFile(const std::string &filePath, std::string &errorMsg) const -> bool
+auto CVTask::isVideoFile(const std::string& filePath, std::string& errorMsg) const -> bool
 {
     return VideoFileValidator::isVideoFile(filePath, errorMsg);
 }
 
-auto CVTask::buildFFmpegCommand(const std::string &ffmpegPath, const std::string &srcPath, const std::string &dstPath,
-                                const std::map<std::string, std::string> &params) const -> std::string
+auto CVTask::buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath, const std::string& dstPath,
+                                const std::map<std::string, std::string>& params) const -> std::string
 {
     std::stringstream cmd;
-    cmd << "\"" << ffmpegPath << "\" -y -i \"" << srcPath << "\" ";
+    cmd << "\"" << ffmpegPath << "\" -hide_banner -progress pipe:1 -nostats -loglevel error -y -i \"" << srcPath
+        << "\" ";
 
     /// 视频参数
     if (params.contains("video_codec"))
@@ -137,27 +145,36 @@ auto CVTask::buildFFmpegCommand(const std::string &ffmpegPath, const std::string
         cmd << "-crf " << params.at("crf") << " ";
     }
 
-    cmd << "\"" << dstPath << "\"";
+    cmd << "\"" << dstPath << "\""; // 将 stderr 重定向到 stdout
 
     return cmd.str();
 }
 
-auto CVTask::executeFFmpegCommand(const std::string &command, const std::string &dstPath, std::string &errorMsg) const
-        -> bool
+auto CVTask::executeFFmpegCommand(const std::string& command, const std::string& srcPath, const std::string& dstPath,
+                                  std::string& errorMsg) const -> bool
 {
     XExec exec;
 
-    if (!exec.start(command.c_str()))
+    // 创建简洁进度条
+    TaskProgressBar progressBar;
+
+    // 设置进度条（如果需要可以设置自定义标题）
+    std::string fileName = std::filesystem::path(dstPath).filename().string();
+    progressBar.setTitle("转码: " + fileName);
+
+    // 启动命令
+    if (!exec.start(command, true)) // 合并 stderr 到 stdout
     {
         errorMsg = "启动FFmpeg命令失败";
         return false;
     }
 
-    /// 显示进度
-    showProgress(exec);
+    // 显示进度条（使用FFmpeg特定的进度监控）
+    progressBar.showWithFfmpeg(exec, srcPath);
 
     // 等待完成
-    bool success = exec.wait();
+    int  exitCode = exec.wait();
+    bool success  = (exitCode == 0);
 
     /// 验证结果
     if (success)
@@ -175,44 +192,21 @@ auto CVTask::executeFFmpegCommand(const std::string &command, const std::string 
     }
     else
     {
-        errorMsg = "转码过程失败";
+        errorMsg = "转码过程失败，退出码: " + std::to_string(exitCode);
+
+        // 获取错误输出
+        std::string stderrOutput = exec.getStderr();
+        if (!stderrOutput.empty())
+        {
+            errorMsg += "\n错误信息: " + stderrOutput;
+        }
+
         return false;
     }
 }
 
-auto CVTask::showProgress(XExec &exec) const -> void
-{
-    std::cout << "转码进度:" << std::endl;
 
-    while (exec.isRunning())
-    {
-        std::string output;
-        if (exec.getOutput(output))
-        {
-            /// 解析并显示进度
-            parseAndDisplayProgress(output);
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-}
-
-auto CVTask::parseAndDisplayProgress(const std::string &output) const -> void
-{
-    /// 简单的进度解析
-    if (output.find("time=") != std::string::npos)
-    {
-        size_t timePos = output.find("time=");
-        size_t endPos  = output.find(" bitrate=");
-
-        if (timePos != std::string::npos && endPos != std::string::npos && endPos > timePos)
-        {
-            std::string timeInfo = output.substr(timePos + 5, endPos - timePos - 5);
-            std::cout << "\r已处理: " << timeInfo << std::flush;
-        }
-    }
-}
-
-auto CVTask::validatePaths(const std::string &srcPath, const std::string &dstPath, std::string &errorMsg) const -> bool
+auto CVTask::validatePaths(const std::string& srcPath, const std::string& dstPath, std::string& errorMsg) const -> bool
 {
     namespace fs = std::filesystem;
 
@@ -246,7 +240,7 @@ auto CVTask::validatePaths(const std::string &srcPath, const std::string &dstPat
             return false;
         }
     }
-    catch (const fs::filesystem_error &e)
+    catch (const fs::filesystem_error& e)
     {
         std::cout << "警告: 无法获取文件大小: " << e.what() << std::endl;
     }
@@ -261,7 +255,7 @@ auto CVTask::validatePaths(const std::string &srcPath, const std::string &dstPat
         {
             fs::create_directories(dstDir);
         }
-        catch (const fs::filesystem_error &e)
+        catch (const fs::filesystem_error& e)
         {
             errorMsg = "无法创建目标目录: " + std::string(e.what());
             return false;
@@ -271,5 +265,6 @@ auto CVTask::validatePaths(const std::string &srcPath, const std::string &dstPat
     return true;
 }
 
+
 IMPLEMENT_CREATE_DEFAULT(CVTask)
-template auto CVTask::create(const std::string_view &, const TaskFunc &, const std::string_view &) -> CVTask::Ptr;
+template auto CVTask::create(const std::string_view&, const TaskFunc&, const std::string_view&) -> CVTask::Ptr;

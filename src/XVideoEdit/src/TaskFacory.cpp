@@ -2,6 +2,8 @@
 
 #include "CVTask.h"
 
+#include <iostream>
+
 auto TackFactory::createTask(const std::string_view &name, const XTask::TaskFunc &func,
                              const std::string_view &description) -> XTask::Ptr
 {

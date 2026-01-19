@@ -1,23 +1,11 @@
-﻿// VideoFileValidator.cpp
-#include "VideoFileValidator.h"
+﻿#include "VideoFileValidator.h"
+
+#include "XFile.h"
+#include "XExec.h"
 
 #include <fstream>
 #include <algorithm>
-#include <cstring>
-#include <cctype>
 #include <iostream>
-
-#ifdef _WIN32
-#include <windows.h>
-#define POPEN  _popen
-#define PCLOSE _pclose
-#else
-#include <unistd.h>
-#define POPEN  popen
-#define PCLOSE pclose
-#endif
-
-namespace fs = std::filesystem;
 
 auto VideoFileValidator::isVideoFile(const std::string& filePath, std::string& errorMsg, ValidationLevel level) -> bool
 {
@@ -70,7 +58,7 @@ auto VideoFileValidator::isVideoFile(const std::string& filePath, std::string& e
     }
 }
 
-bool VideoFileValidator::isVideoFileByExtension(const std::string& filePath, std::string& errorMsg)
+auto VideoFileValidator::isVideoFileByExtension(const std::string& filePath, std::string& errorMsg) -> bool
 {
     fs::path    filePathObj(filePath);
     std::string extension = filePathObj.extension().string();
@@ -95,7 +83,7 @@ bool VideoFileValidator::isVideoFileByExtension(const std::string& filePath, std
     return true;
 }
 
-bool VideoFileValidator::isVideoFileByMagicNumber(const std::string& filePath, std::string& errorMsg)
+auto VideoFileValidator::isVideoFileByMagicNumber(const std::string& filePath, std::string& errorMsg) -> bool
 {
     try
     {
@@ -215,148 +203,40 @@ bool VideoFileValidator::isVideoFileByMagicNumber(const std::string& filePath, s
 
 bool VideoFileValidator::isVideoFileByFFmpeg(const std::string& filePath, std::string& errorMsg)
 {
-    /// 首先尝试找到ffmpeg或ffprobe
-    std::string ffprobePath;
-
-    /// 查找ffprobe（更专业的探测工具）
-    const char* possiblePaths[] = { "ffprobe",     "ffmpeg",
-#ifdef _WIN32
-                                    "ffprobe.exe", "ffmpeg.exe",
-#endif
-                                    FFPROBE_PATH,  FFMPEG_PATH };
-
-    bool        foundFFmpeg = false;
-    std::string ffmpegCmd;
-
-    for (const char* cmd : possiblePaths)
+    try
     {
-        /// 简单的检查：尝试执行 --version
-        std::string testCmd = std::string(cmd) + " --version 2>&1";
-        FILE*       pipe    = POPEN(testCmd.c_str(), "r");
-        if (pipe)
+        std::string command = std::string(FFPROBE_PATH) +
+                " -v error -select_streams v:0 -show_entries stream=codec_type "
+                "-of default=noprint_wrappers=1:nokey=1 \"" +
+                filePath + "\"";
+
+        XExec::XResult result = XExec::execute(command);
+        if (result.exitCode != 0)
         {
-            char buffer[128];
-            if (fgets(buffer, sizeof(buffer), pipe) != nullptr)
-            {
-                /// 检查输出是否包含ffmpeg或ffprobe
-                std::string output(buffer);
-                if (output.find("ffmpeg") != std::string::npos || output.find("ffprobe") != std::string::npos)
-                {
-                    ffmpegCmd   = cmd;
-                    foundFFmpeg = true;
-                }
-            }
-            PCLOSE(pipe);
+            errorMsg = "FFmpeg探测失败: " + result.stderrOutput;
+            return false;
         }
-        if (foundFFmpeg)
-            break;
-    }
 
-    if (!foundFFmpeg)
-    {
-        errorMsg = "未找到ffmpeg或ffprobe可执行文件";
-        return false;
-    }
-
-    /// 构建探测命令
-    std::string command;
-
-    if (ffmpegCmd.find("ffprobe") != std::string::npos)
-    {
-        /// 使用ffprobe（更准确）
-        command = "\"" + ffmpegCmd +
-                "\" -v error -select_streams v:0 "
-                "-show_entries stream=codec_type -of csv=p=0 \"" +
-                filePath + "\" 2>&1";
-    }
-    else
-    {
-        /// 使用ffmpeg
-        command = "\"" + ffmpegCmd + "\" -v error -i \"" + filePath + "\" -f null - 2>&1 | " +
-#ifdef _WIN32
-                "findstr /i \"video\"";
-#else
-                "grep -i \"video\"";
-#endif
-    }
-
-    /// 执行命令
-    FILE* pipe = POPEN(command.c_str(), "r");
-    if (!pipe)
-    {
-        errorMsg = "无法执行FFmpeg探测命令";
-        return false;
-    }
-
-    char        buffer[256];
-    std::string result;
-
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
-    {
-        result += buffer;
-    }
-
-    int status = PCLOSE(pipe);
-
-    /// 解析结果
-    if (ffmpegCmd.find("ffprobe") != std::string::npos)
-    {
-        /// ffprobe输出：如果包含"video"，则认为是视频文件
-        if (result.find("video") != std::string::npos)
+        std::string output = result.stdoutOutput;
+        std::erase(output, '\n');
+        std::erase(output, '\r');
+        if (output == "video")
         {
             return true;
         }
-    }
-    else
-    {
-        /// ffmpeg输出：检查是否有视频流信息
-        if (result.find("Video:") != std::string::npos ||
-            result.find("Stream #") != std::string::npos && result.find("Video") != std::string::npos)
+        else
         {
-            return true;
+            errorMsg = "FFmpeg未检测到视频流";
+            return false;
         }
     }
-
-    /// 检查错误信息
-    if (result.find("Invalid data found") != std::string::npos ||
-        result.find("moov atom not found") != std::string::npos)
+    catch (const std::exception& e)
     {
-        errorMsg = "FFmpeg报告: 文件格式错误或损坏";
+        errorMsg = "FFmpeg探测异常: " + std::string(e.what());
         return false;
     }
-
-    if (result.find("Protocol not found") != std::string::npos || result.find("Unsupported codec") != std::string::npos)
-    {
-        errorMsg = "FFmpeg报告: 不支持的格式或编码";
-        return false;
-    }
-
-    if (result.find("No such file or directory") != std::string::npos)
-    {
-        errorMsg = "FFmpeg报告: 文件不存在";
-        return false;
-    }
-
-    if (result.find("Permission denied") != std::string::npos)
-    {
-        errorMsg = "FFmpeg报告: 权限不足";
-        return false;
-    }
-
-    if (!result.empty())
-    {
-        /// 截取第一行错误信息
-        size_t      newlinePos = result.find('\n');
-        std::string firstLine  = (newlinePos != std::string::npos) ? result.substr(0, newlinePos) : result;
-        errorMsg               = "FFmpeg报告: " + firstLine;
-    }
-    else
-    {
-        errorMsg = "FFmpeg无法探测到视频流";
-    }
-
-    return false;
 }
+
 
 const std::set<std::string>& VideoFileValidator::getVideoExtensions()
 {

@@ -17,10 +17,10 @@ public:
     static auto isVideoFile(const std::string& filePath, std::string& errorMsg,
                             ValidationLevel level = ValidationLevel::FFmpegProbe) -> bool;
 
-    static bool isVideoFileByExtension(const std::string& filePath, std::string& errorMsg);
-    static bool isVideoFileByMagicNumber(const std::string& filePath, std::string& errorMsg);
+    static auto isVideoFileByExtension(const std::string& filePath, std::string& errorMsg) -> bool;
+    static auto isVideoFileByMagicNumber(const std::string& filePath, std::string& errorMsg) -> bool;
     static bool isVideoFileByFFmpeg(const std::string& filePath, std::string& errorMsg);
 
 private:
-    static const std::set<std::string>& getVideoExtensions();
+    static auto getVideoExtensions() -> const std::set<std::string>&;
 };

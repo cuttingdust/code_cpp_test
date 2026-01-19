@@ -67,6 +67,12 @@ message("replxx_FOUND = ${replxx_FOUND}")
 message("replxx_VERSION = ${replxx_VERSION}")
 message("replxx_LIBS = ${replxx_LIBS}")
 
+# indicators
+find_package(indicators CONFIG REQUIRED)
+message("indicators_FOUND = ${indicators_FOUND}")
+message("indicators_VERSION = ${indicators_VERSION}")
+message("indicators_LIBS = ${indicators_LIBS}")
+
 # OpenCV
 find_package(OpenCV CONFIG REQUIRED)
 message("OpenCV_FOUND = ${OpenCV_FOUND}")

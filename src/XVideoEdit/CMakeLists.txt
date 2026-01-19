@@ -6,6 +6,7 @@ project(${CURRENT_DIR})
 set(DPS_LIBRARYS
    ${FFT_MOUDLES}
    replxx::replxx
+   indicators::indicators
 )
 
 cpp_execute(${PROJECT_NAME})

@@ -19,6 +19,7 @@ public:
     std::string                           description_;
     std::vector<Parameter>                parameters_;
     std::map<std::string, ParameterValue> parameterList_;
+    mutable ProgressCallback              progressCallback_;
 };
 
 XTask::PImpl::PImpl(XTask *owenr, const std::string_view &name, TaskFunc func, const std::string_view &desc) :
@@ -38,6 +39,7 @@ XTask::XTask(const std::string_view &name, TaskFunc func, const std::string_view
 XTask::~XTask()                            = default;
 XTask::XTask(XTask &&) noexcept            = default;
 XTask &XTask::operator=(XTask &&) noexcept = default;
+
 
 XTask &XTask::addParameter(const std::string &paramName, Parameter::Type type, const std::string &desc, bool required,
                            Parameter::CompletionFunc completor)
@@ -76,13 +78,13 @@ XTask &XTask::addBoolParam(const std::string &paramName, const std::string &desc
 }
 
 auto XTask::addFileParam(const std::string &paramName, const std::string &desc, bool required,
-        Parameter::CompletionFunc completor) -> XTask &
+                         Parameter::CompletionFunc completor) -> XTask &
 {
     return addParameter(paramName, Parameter::Type::File, desc, required, std::move(completor));
 }
 
 auto XTask::addDirectoryParam(const std::string &paramName, const std::string &desc, bool required,
-        Parameter::CompletionFunc completor) -> XTask &
+                              Parameter::CompletionFunc completor) -> XTask &
 {
     return addParameter(paramName, Parameter::Type::Directory, desc, required, std::move(completor));
 }
@@ -213,6 +215,16 @@ auto XTask::getFFmpegPath() const -> std::string
 #else
     return "ffmpeg";
 #endif
+}
+
+void XTask::setProgressCallback(ProgressCallback callback) const
+{
+    impl_->progressCallback_ = std::move(callback);
+}
+
+auto XTask::getProgressCallback() const -> ProgressCallback
+{
+    return impl_->progressCallback_;
 }
 
 auto XTask::setName(const std::string_view &name) const -> void

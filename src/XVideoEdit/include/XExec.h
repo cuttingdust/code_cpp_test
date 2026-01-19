@@ -1,27 +1,48 @@
-﻿#pragma once
+﻿#ifndef XEXEC_H
+#define XEXEC_H
 
-#include "XConst.h"
+#include <string>
+#include <functional>
+#include <memory>
 
 class XExec
 {
 public:
+    using OutputCallback = std::function<void(const std::string& line, bool isStderr)>;
+
+    struct XResult
+    {
+        int         exitCode = -1;
+        std::string stdoutOutput;
+        std::string stderrOutput;
+    };
+
     XExec();
     ~XExec();
+    XExec(XExec&&) noexcept;
+    XExec& operator=(XExec&&) noexcept;
 
-    /// 允许移动
-    XExec(XExec &&) noexcept;
-    XExec &operator=(XExec &&) noexcept;
+    // 删除拷贝构造和赋值
+    XExec(const XExec&)            = delete;
+    XExec& operator=(const XExec&) = delete;
 
-public:
-    auto start(const char *cmd) -> bool;
+    void setOutputCallback(OutputCallback callback);
 
-    auto isRunning() const -> bool;
+    bool start(const std::string& cmd, bool redirectStderr = true);
 
-    auto getOutput(std::string &ret) const -> bool;
+    std::string getStdout() const;
+    std::string getStderr() const;
+    std::string getAllOutput() const;
 
-    auto wait() -> bool;
+    int  wait();
+    bool isRunning() const;
+    bool terminate();
+
+    static XResult execute(const std::string& command, bool redirectStderr = true, int timeoutMs = 0);
 
 private:
-    class PImpl;
-    std::unique_ptr<PImpl> impl_;
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
+
+#endif // XEXEC_H

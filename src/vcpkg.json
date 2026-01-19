@@ -6,7 +6,16 @@
 		"opencv",
 		{
 			"name": "ffmpeg",
-			"features": ["ffmpeg", "ffplay", "ffprobe"] 
+			"features": [
+				"ffmpeg",
+				"ffplay",
+				"ffprobe",
+				"nonfree",  
+				"gpl",      
+				"x264",     
+				"x265",     
+				"fdk-aac"
+			]
 		}
 	]
 }
