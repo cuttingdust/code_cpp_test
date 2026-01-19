@@ -12,79 +12,97 @@
 #include <sstream>
 #include <memory>
 
-class CVTask::Impl
+class CVTask::PImpl
 {
 public:
-    Impl(CVTask* owner);
-    ~Impl() = default;
+    PImpl(CVTask* owner);
+    ~PImpl() = default;
+
+public:
+    auto isVideoFile(const std::string& filePath, std::string& errorMsg) const -> bool;
+
+    auto validatePaths(const std::string& srcPath, const std::string& dstPath, std::string& errorMsg) const -> bool;
+
+    auto buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath, const std::string& dstPath,
+                            const std::map<std::string, std::string>& params) const -> std::string;
+
+    auto executeFFmpegCommand(const std::string& command, const std::map<std::string, std::string>& inputParams,
+                              std::string& errorMsg) const -> bool;
 
 public:
     CVTask* owner_ = nullptr;
 };
 
-CVTask::Impl::Impl(CVTask* owner) : owner_(owner)
+CVTask::PImpl::PImpl(CVTask* owner) : owner_(owner)
 {
 }
 
-CVTask::CVTask()
-{
-    this->setTaskType(TaskType::TT_VIDEO);
-    impl_ = std::make_unique<CVTask::Impl>(this);
-}
-
-CVTask::CVTask(const std::string_view& name, const TaskFunc& func, const std::string_view& desc) :
-    XTask(name, func, desc), impl_(std::make_unique<CVTask::Impl>(this))
-{
-}
-
-CVTask::~CVTask() = default;
-
-auto CVTask::execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool
-{
-    /// 1. 参数验证
-    if (!XTask::execute(inputParams, errorMsg))
-    {
-        return false;
-    }
-
-    /// 2. 获取基本参数
-    std::string ffmpegPath = getFFmpegPath();
-    std::string srcPath    = getRequiredParam(inputParams, "--input", errorMsg);
-    std::string dstPath    = getRequiredParam(inputParams, "--output", errorMsg);
-
-    if (srcPath.empty() || dstPath.empty())
-    {
-        return false;
-    }
-
-    /// 3. 文件系统检查
-    if (!validatePaths(srcPath, dstPath, errorMsg))
-    {
-        return false;
-    }
-
-    /// 4. 检查是否为视频文件
-    if (!isVideoFile(srcPath, errorMsg))
-    {
-        return false;
-    }
-
-    /// 5. 构建FFmpeg命令
-    std::string command = buildFFmpegCommand(ffmpegPath, srcPath, dstPath, inputParams);
-    // std::cout << "执行命令: " << command << std::endl;
-
-    /// 6. 执行命令
-    return executeFFmpegCommand(command, srcPath, dstPath, errorMsg);
-}
-
-/// 检查是否为视频文件
-auto CVTask::isVideoFile(const std::string& filePath, std::string& errorMsg) const -> bool
+auto CVTask::PImpl::isVideoFile(const std::string& filePath, std::string& errorMsg) const -> bool
 {
     return VideoFileValidator::isVideoFile(filePath, errorMsg);
 }
 
-auto CVTask::buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath, const std::string& dstPath,
-                                const std::map<std::string, std::string>& params) const -> std::string
+auto CVTask::PImpl::validatePaths(const std::string& srcPath, const std::string& dstPath, std::string& errorMsg) const
+        -> bool
+{
+    /// 检查源文件
+    if (!fs::exists(srcPath))
+    {
+        errorMsg = "源文件不存在: " + srcPath;
+        return false;
+    }
+
+    if (!fs::is_regular_file(srcPath))
+    {
+        errorMsg = "源文件不是普通文件: " + srcPath;
+        return false;
+    }
+
+    /// 检查文件大小（可选）
+    try
+    {
+        auto fileSize = fs::file_size(srcPath);
+        if (fileSize == 0)
+        {
+            errorMsg = "源文件大小为0";
+            return false;
+        }
+
+        constexpr uintmax_t MAX_FILE_SIZE = 10ULL * 1024 * 1024 * 1024; // 10GB
+        if (fileSize > MAX_FILE_SIZE)
+        {
+            errorMsg = "源文件过大（超过10GB）";
+            return false;
+        }
+    }
+    catch (const fs::filesystem_error& e)
+    {
+        std::cout << "警告: 无法获取文件大小: " << e.what() << std::endl;
+    }
+
+    /// 创建目标目录
+    fs::path dstFilePath(dstPath);
+    fs::path dstDir = dstFilePath.parent_path();
+
+    if (!dstDir.empty() && !fs::exists(dstDir))
+    {
+        try
+        {
+            fs::create_directories(dstDir);
+        }
+        catch (const fs::filesystem_error& e)
+        {
+            errorMsg = "无法创建目标目录: " + std::string(e.what());
+            return false;
+        }
+    }
+
+    return true;
+}
+
+auto CVTask::PImpl::buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath,
+                                       const std::string&                        dstPath,
+                                       const std::map<std::string, std::string>& params) const -> std::string
 {
     std::stringstream cmd;
     cmd << "\"" << ffmpegPath << "\" -hide_banner -progress pipe:1 -nostats -loglevel error -y -i \"" << srcPath
@@ -145,34 +163,33 @@ auto CVTask::buildFFmpegCommand(const std::string& ffmpegPath, const std::string
         cmd << "-crf " << params.at("crf") << " ";
     }
 
-    cmd << "\"" << dstPath << "\""; // 将 stderr 重定向到 stdout
+    cmd << "\"" << dstPath << "\""; /// 将 stderr 重定向到 stdout
 
     return cmd.str();
 }
 
-auto CVTask::executeFFmpegCommand(const std::string& command, const std::string& srcPath, const std::string& dstPath,
-                                  std::string& errorMsg) const -> bool
+auto CVTask::PImpl::executeFFmpegCommand(const std::string&                        command,
+                                         const std::map<std::string, std::string>& inputParams,
+                                         std::string&                              errorMsg) const -> bool
 {
-    XExec exec;
-
-    // 创建简洁进度条
+    XExec           exec;
     TaskProgressBar progressBar;
 
-    // 设置进度条（如果需要可以设置自定义标题）
+    std::string dstPath  = inputParams.at("--output");
     std::string fileName = std::filesystem::path(dstPath).filename().string();
     progressBar.setTitle("转码: " + fileName);
 
-    // 启动命令
-    if (!exec.start(command, true)) // 合并 stderr 到 stdout
+    /// 启动命令
+    if (!exec.start(command, true)) /// 合并 stderr 到 stdout
     {
         errorMsg = "启动FFmpeg命令失败";
         return false;
     }
 
-    // 显示进度条（使用FFmpeg特定的进度监控）
-    progressBar.showWithFfmpeg(exec, srcPath);
+    /// 显示进度条（使用FFmpeg特定的进度监控）
+    progressBar.updateProgress(exec, inputParams);
 
-    // 等待完成
+    /// 等待完成
     int  exitCode = exec.wait();
     bool success  = (exitCode == 0);
 
@@ -194,7 +211,7 @@ auto CVTask::executeFFmpegCommand(const std::string& command, const std::string&
     {
         errorMsg = "转码过程失败，退出码: " + std::to_string(exitCode);
 
-        // 获取错误输出
+        /// 获取错误输出
         std::string stderrOutput = exec.getStderr();
         if (!stderrOutput.empty())
         {
@@ -205,64 +222,55 @@ auto CVTask::executeFFmpegCommand(const std::string& command, const std::string&
     }
 }
 
-
-auto CVTask::validatePaths(const std::string& srcPath, const std::string& dstPath, std::string& errorMsg) const -> bool
+CVTask::CVTask()
 {
-    namespace fs = std::filesystem;
+    this->setTaskType(TaskType::TT_VIDEO);
+    impl_ = std::make_unique<CVTask::PImpl>(this);
+}
 
-    /// 检查源文件
-    if (!fs::exists(srcPath))
+CVTask::CVTask(const std::string_view& name, const TaskFunc& func, const std::string_view& desc) :
+    XTask(name, func, desc), impl_(std::make_unique<CVTask::PImpl>(this))
+{
+}
+
+CVTask::~CVTask() = default;
+
+auto CVTask::execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool
+{
+    /// 1. 参数验证
+    if (!XTask::execute(inputParams, errorMsg))
     {
-        errorMsg = "源文件不存在: " + srcPath;
         return false;
     }
 
-    if (!fs::is_regular_file(srcPath))
+    /// 2. 获取基本参数
+    std::string ffmpegPath = getFFmpegPath();
+    std::string srcPath    = getRequiredParam(inputParams, "--input", errorMsg);
+    std::string dstPath    = getRequiredParam(inputParams, "--output", errorMsg);
+
+    if (srcPath.empty() || dstPath.empty())
     {
-        errorMsg = "源文件不是普通文件: " + srcPath;
         return false;
     }
 
-    /// 检查文件大小（可选）
-    try
+    /// 3. 文件系统检查
+    if (!impl_->validatePaths(srcPath, dstPath, errorMsg))
     {
-        auto fileSize = fs::file_size(srcPath);
-        if (fileSize == 0)
-        {
-            errorMsg = "源文件大小为0";
-            return false;
-        }
-
-        constexpr uintmax_t MAX_FILE_SIZE = 10ULL * 1024 * 1024 * 1024; // 10GB
-        if (fileSize > MAX_FILE_SIZE)
-        {
-            errorMsg = "源文件过大（超过10GB）";
-            return false;
-        }
-    }
-    catch (const fs::filesystem_error& e)
-    {
-        std::cout << "警告: 无法获取文件大小: " << e.what() << std::endl;
+        return false;
     }
 
-    /// 创建目标目录
-    fs::path dstFilePath(dstPath);
-    fs::path dstDir = dstFilePath.parent_path();
-
-    if (!dstDir.empty() && !fs::exists(dstDir))
+    /// 4. 检查是否为视频文件
+    if (!impl_->isVideoFile(srcPath, errorMsg))
     {
-        try
-        {
-            fs::create_directories(dstDir);
-        }
-        catch (const fs::filesystem_error& e)
-        {
-            errorMsg = "无法创建目标目录: " + std::string(e.what());
-            return false;
-        }
+        return false;
     }
 
-    return true;
+    /// 5. 构建FFmpeg命令
+    std::string command = impl_->buildFFmpegCommand(ffmpegPath, srcPath, dstPath, inputParams);
+    std::cout << "执行命令: " << command << std::endl;
+
+    /// 6. 执行命令
+    return impl_->executeFFmpegCommand(command, inputParams, errorMsg);
 }
 
 

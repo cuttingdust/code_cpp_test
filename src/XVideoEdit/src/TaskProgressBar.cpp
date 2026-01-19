@@ -20,6 +20,7 @@ public:
     Impl();
     ~Impl();
 
+public:
     void setupProgressBar(const std::string& title);
     void showWithFfmpegImpl(XExec& exec, const std::string& srcPath);
     void showGenericImpl(XExec& exec, const std::string& taskName);
@@ -34,23 +35,13 @@ private:
     std::string        currentMessage_;
     std::mutex         mutex_;
 
-    // FFmpeg进度解析
-    struct FfmpegProgress
-    {
-        float       percent = 0.0f;
-        std::string timeInfo;
-        std::string speed;
-        bool        valid = false;
-    };
-
-    FfmpegProgress parseFfmpegLine(const std::string& line) const;
-    float          estimateTotalDuration(const std::string& srcPath) const;
-    std::string    formatDuration(float seconds) const;
+    float       estimateTotalDuration(const std::string& srcPath) const;
+    std::string formatDuration(float seconds) const;
 };
 
 TaskProgressBar::Impl::Impl()
 {
-    // 使用简洁的配置方式初始化进度条
+    /// 使用简洁的配置方式初始化进度条
     bar_.set_option(option::BarWidth{ 50 });
     bar_.set_option(option::Start{ "[" });
     bar_.set_option(option::Fill{ "=" });
@@ -68,18 +59,18 @@ TaskProgressBar::Impl::~Impl()
 {
     if (isActive_)
     {
-        // 确保光标恢复正常
+        /// 确保光标恢复正常
         show_console_cursor(true);
     }
 }
 
-void TaskProgressBar::Impl::setupProgressBar(const std::string& title)
+auto TaskProgressBar::Impl::setupProgressBar(const std::string& title) -> void
 {
     bar_.set_option(option::PostfixText{ title });
     currentPercent_ = 0.0f;
     isActive_       = true;
 
-    // 隐藏光标以获得更流畅的显示
+    /// 隐藏光标以获得更流畅的显示
     show_console_cursor(false);
 }
 
@@ -435,7 +426,6 @@ void TaskProgressBar::Impl::markAsCompletedImpl(const std::string& message)
     bar_.set_option(option::PostfixText{ message });
     bar_.set_option(option::ForegroundColor{ Color::green });
     bar_.set_progress(100.f);
-    // bar_.mark_as_completed();
     isActive_ = false;
 }
 
@@ -452,87 +442,6 @@ void TaskProgressBar::Impl::markAsFailedImpl(const std::string& message)
     isActive_ = false;
 }
 
-TaskProgressBar::Impl::FfmpegProgress TaskProgressBar::Impl::parseFfmpegLine(const std::string& line) const
-{
-    FfmpegProgress progress;
-
-    // 修正正则表达式：匹配 out_time=HH:MM:SS.mmmmmm (6位毫秒)
-    // 注意：FFmpeg 的 -progress pipe:1 输出是 out_time=，不是 time=
-    static std::regex time_regex(R"(out_time=(\d{2}):(\d{2}):(\d{2})\.(\d{6}))");
-    static std::regex speed_regex(R"(speed\s*=\s*([\d\.]+)x)");
-    std::smatch       matches;
-
-    // 解析时间 - 现在匹配 out_time=
-    if (std::regex_search(line, matches, time_regex) && matches.size() >= 5)
-    {
-        try
-        {
-            int hours   = std::stoi(matches[1].str());
-            int minutes = std::stoi(matches[2].str());
-            int seconds = std::stoi(matches[3].str());
-
-            // 处理6位毫秒
-            std::string microStr     = matches[4].str();
-            int         microseconds = std::stoi(microStr);
-
-            // 转换为2位百分秒（为了显示）
-            int centiseconds = microseconds / 10000; // 6位 -> 2位
-
-            std::stringstream time_ss;
-            time_ss << std::setfill('0') << std::setw(2) << hours << ":" << std::setw(2) << minutes << ":"
-                    << std::setw(2) << seconds << "." << std::setw(2) << centiseconds;
-
-            progress.timeInfo = time_ss.str();
-            progress.valid    = true;
-
-            // 调试输出
-            // std::cout << "解析到时间: " << progress.timeInfo
-            //          << " (原始: " << matches[0].str() << ")" << std::endl;
-        }
-        catch (...)
-        {
-            // 解析失败，尝试简单提取
-            size_t pos = line.find("out_time=");
-            if (pos != std::string::npos)
-            {
-                size_t end = line.find(' ', pos);
-                if (end == std::string::npos)
-                    end = line.length();
-                std::string rawTime = line.substr(pos + 9, end - pos - 9);
-
-                // 简化显示：只取前2位毫秒
-                size_t dotPos = rawTime.find('.');
-                if (dotPos != std::string::npos && dotPos + 8 <= rawTime.length())
-                {
-                    progress.timeInfo = rawTime.substr(0, dotPos + 3); // 保留2位毫秒
-                }
-                else
-                {
-                    progress.timeInfo = rawTime;
-                }
-                progress.valid = true;
-            }
-        }
-    }
-
-    // 解析速度
-    if (std::regex_search(line, matches, speed_regex) && matches.size() >= 2)
-    {
-        try
-        {
-            float             speedValue = std::stof(matches[1].str());
-            std::stringstream speed_ss;
-            speed_ss << std::fixed << std::setprecision(2) << speedValue << "x";
-            progress.speed = speed_ss.str();
-        }
-        catch (...)
-        {
-            progress.speed = matches[1].str() + "x";
-        }
-    }
-
-    return progress;
-}
 
 float TaskProgressBar::Impl::estimateTotalDuration(const std::string& srcPath) const
 {
@@ -593,18 +502,14 @@ TaskProgressBar::TaskProgressBar() : impl_(std::make_unique<Impl>())
 
 TaskProgressBar::~TaskProgressBar() = default;
 
-void TaskProgressBar::setProgressCallback(ProgressCallback callback)
-{
-    // 如果未来需要外部回调，可以在这里实现
-}
-
-void TaskProgressBar::setTitle(const std::string& title)
+auto TaskProgressBar::setTitle(const std::string& title) -> void
 {
     impl_->setupProgressBar(title);
 }
 
-void TaskProgressBar::showWithFfmpeg(XExec& exec, const std::string& srcPath)
+void TaskProgressBar::updateProgress(XExec& exec, const std::map<std::string, std::string>& inputParams)
 {
+    auto srcPath = inputParams.at("--input");
     impl_->showWithFfmpegImpl(exec, srcPath);
 }
 
@@ -613,7 +518,7 @@ void TaskProgressBar::showGeneric(XExec& exec, const std::string& taskName)
     impl_->showGenericImpl(exec, taskName);
 }
 
-void TaskProgressBar::updateProgress(float percent, const std::string& message)
+void TaskProgressBar::setProgress(float percent, const std::string& message)
 {
     impl_->updateProgressImpl(percent, message);
 }

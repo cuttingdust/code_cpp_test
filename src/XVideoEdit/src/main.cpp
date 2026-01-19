@@ -25,13 +25,13 @@ int main(int argc, char* argv[])
             .addFileParam("-s", "源文件路径", true,
                           [](std::string_view partial) -> std::vector<std::string>
                           {
-                              // 如果看起来像路径，返回空，让路径补全处理
+                              /// 如果看起来像路径，返回空，让路径补全处理
                               if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
                                   partial.find('.') != std::string::npos)
                               {
                                   return {};
                               }
-                              // 否则提供一些常用建议
+                              /// 否则提供一些常用建议
                               return { "file.txt", "data.dat", "source" };
                           })
             .addFileParam("-d", "目标路径", true,
@@ -241,49 +241,48 @@ int main(int argc, char* argv[])
                         std::cout << "  从 " << src << " 转码到 " << dst << std::endl;
                     },
                     "转码视频文件")
-            .addStringParam("--input", "源文件路径", true,
-                            [](std::string_view partial) -> std::vector<std::string>
-                            {
-                                // 如果是路径，返回空让路径补全处理
-                                if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
-                                    partial.find('.') != std::string::npos)
-                                {
-                                    return {};
-                                }
-                                // 否则提供常见视频文件扩展名
-                                static const std::vector<std::string> videoExtensions = { ".mp4", ".avi", ".mov",
-                                                                                          ".mkv", ".wmv", ".flv",
-                                                                                          ".webm" };
-                                std::vector<std::string>              suggestions;
-                                for (const auto& ext : videoExtensions)
-                                {
-                                    suggestions.push_back("video" + ext);
-                                }
-                                return suggestions;
-                            })
-            .addStringParam("--output", "目标路径", true,
-                            [](std::string_view partial) -> std::vector<std::string>
-                            {
-                                // 如果是路径，返回空让路径补全处理
-                                if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
-                                    partial.find('.') != std::string::npos)
-                                {
-                                    return {};
-                                }
-                                // 否则提供常见输出文件建议
-                                static const std::vector<std::string> outputSuggestions = {
-                                    "output.mp4", "result.mp4", "converted.mp4", "output/", "result/", "converted/"
-                                };
-                                std::vector<std::string> suggestions;
-                                for (const auto& suggestion : outputSuggestions)
-                                {
-                                    if (suggestion.starts_with(partial))
-                                    {
-                                        suggestions.push_back(suggestion);
-                                    }
-                                }
-                                return suggestions;
-                            });
+            .addFileParam("--input", "源文件路径", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见视频文件扩展名
+                              static const std::vector<std::string> videoExtensions = { ".mp4", ".avi", ".mov", ".mkv",
+                                                                                        ".wmv", ".flv", ".webm" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& ext : videoExtensions)
+                              {
+                                  suggestions.push_back("video" + ext);
+                              }
+                              return suggestions;
+                          })
+            .addFileParam("--output", "目标路径", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见输出文件建议
+                              static const std::vector<std::string> outputSuggestions = {
+                                  "output.mp4", "result.mp4", "converted.mp4", "output/", "result/", "converted/"
+                              };
+                              std::vector<std::string> suggestions;
+                              for (const auto& suggestion : outputSuggestions)
+                              {
+                                  if (suggestion.starts_with(partial))
+                                  {
+                                      suggestions.push_back(suggestion);
+                                  }
+                              }
+                              return suggestions;
+                          });
 
     std::cout << "=== 增强型任务处理器示例 ===" << std::endl;
     std::cout << "支持参数类型: 字符串、整数、浮点数、布尔值" << std::endl;
