@@ -1,21 +1,17 @@
-﻿#include "CVTask.h"
+﻿#include "AVTask.h"
 #include "XExec.h"
 #include "VideoFileValidator.h"
-#include "TaskProgressBar.h"
 #include "XFile.h"
+#include "XTool.h"
 
-#include <filesystem>
 #include <iostream>
-#include <thread>
-#include <regex>
 #include <chrono>
 #include <sstream>
-#include <memory>
 
-class CVTask::PImpl
+class AVTask::PImpl
 {
 public:
-    PImpl(CVTask* owner);
+    PImpl(AVTask* owner);
     ~PImpl() = default;
 
 public:
@@ -30,19 +26,19 @@ public:
                               std::string& errorMsg) const -> bool;
 
 public:
-    CVTask* owner_ = nullptr;
+    AVTask* owner_ = nullptr;
 };
 
-CVTask::PImpl::PImpl(CVTask* owner) : owner_(owner)
+AVTask::PImpl::PImpl(AVTask* owner) : owner_(owner)
 {
 }
 
-auto CVTask::PImpl::isVideoFile(const std::string& filePath, std::string& errorMsg) const -> bool
+auto AVTask::PImpl::isVideoFile(const std::string& filePath, std::string& errorMsg) const -> bool
 {
     return VideoFileValidator::isVideoFile(filePath, errorMsg);
 }
 
-auto CVTask::PImpl::validatePaths(const std::string& srcPath, const std::string& dstPath, std::string& errorMsg) const
+auto AVTask::PImpl::validatePaths(const std::string& srcPath, const std::string& dstPath, std::string& errorMsg) const
         -> bool
 {
     /// 检查源文件
@@ -100,7 +96,7 @@ auto CVTask::PImpl::validatePaths(const std::string& srcPath, const std::string&
     return true;
 }
 
-auto CVTask::PImpl::buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath,
+auto AVTask::PImpl::buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath,
                                        const std::string&                        dstPath,
                                        const std::map<std::string, std::string>& params) const -> std::string
 {
@@ -168,16 +164,15 @@ auto CVTask::PImpl::buildFFmpegCommand(const std::string& ffmpegPath, const std:
     return cmd.str();
 }
 
-auto CVTask::PImpl::executeFFmpegCommand(const std::string&                        command,
+auto AVTask::PImpl::executeFFmpegCommand(const std::string&                        command,
                                          const std::map<std::string, std::string>& inputParams,
                                          std::string&                              errorMsg) const -> bool
 {
-    XExec           exec;
-    TaskProgressBar progressBar;
+    XExec exec;
 
     std::string dstPath  = inputParams.at("--output");
     std::string fileName = std::filesystem::path(dstPath).filename().string();
-    progressBar.setTitle("转码: " + fileName);
+    owner_->setTitle("转码: " + fileName);
 
     /// 启动命令
     if (!exec.start(command, true)) /// 合并 stderr 到 stdout
@@ -187,7 +182,7 @@ auto CVTask::PImpl::executeFFmpegCommand(const std::string&                     
     }
 
     /// 显示进度条（使用FFmpeg特定的进度监控）
-    progressBar.updateProgress(exec, inputParams);
+    owner_->updateProgress(exec, owner_->getName(), inputParams);
 
     /// 等待完成
     int  exitCode = exec.wait();
@@ -222,20 +217,20 @@ auto CVTask::PImpl::executeFFmpegCommand(const std::string&                     
     }
 }
 
-CVTask::CVTask()
+AVTask::AVTask()
 {
     this->setTaskType(TaskType::TT_VIDEO);
-    impl_ = std::make_unique<CVTask::PImpl>(this);
+    impl_ = std::make_unique<AVTask::PImpl>(this);
 }
 
-CVTask::CVTask(const std::string_view& name, const TaskFunc& func, const std::string_view& desc) :
-    XTask(name, func, desc), impl_(std::make_unique<CVTask::PImpl>(this))
+AVTask::AVTask(const std::string& name, const TaskFunc& func, const std::string& desc) :
+    XTask(name, func, desc), impl_(std::make_unique<AVTask::PImpl>(this))
 {
 }
 
-CVTask::~CVTask() = default;
+AVTask::~AVTask() = default;
 
-auto CVTask::execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool
+auto AVTask::execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool
 {
     /// 1. 参数验证
     if (!XTask::execute(inputParams, errorMsg))
@@ -244,7 +239,7 @@ auto CVTask::execute(const std::map<std::string, std::string>& inputParams, std:
     }
 
     /// 2. 获取基本参数
-    std::string ffmpegPath = getFFmpegPath();
+    std::string ffmpegPath = XTool::getFFmpegPath();
     std::string srcPath    = getRequiredParam(inputParams, "--input", errorMsg);
     std::string dstPath    = getRequiredParam(inputParams, "--output", errorMsg);
 
@@ -274,5 +269,5 @@ auto CVTask::execute(const std::map<std::string, std::string>& inputParams, std:
 }
 
 
-IMPLEMENT_CREATE_DEFAULT(CVTask)
-template auto CVTask::create(const std::string_view&, const TaskFunc&, const std::string_view&) -> CVTask::Ptr;
+IMPLEMENT_CREATE_DEFAULT(AVTask)
+template auto AVTask::create(const std::string&, const TaskFunc&, const std::string&) -> AVTask::Ptr;

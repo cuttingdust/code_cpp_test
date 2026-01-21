@@ -22,87 +22,71 @@
 static bool g_showHiddenFiles = false;
 
 /// ==================== 路径操作 ====================
-auto XFile::extractPathPart(const std::string& input) -> std::string
+auto XFile::extractPathPart(const std::string_view& input) -> std::string
 {
     if (input.empty())
         return "";
 
-    /// 查找可能的路径分隔符位置
-    size_t lastSlash = input.find_last_of("/\\");
-    size_t lastSpace = input.find_last_of(' ');
-
-    /// 情况1：输入以路径分隔符结尾
-    if (!input.empty() && (input.back() == '/' || input.back() == '\\'))
+    /// 情况1：输入以路径分隔符结尾（快速判断）
+    if (input.back() == '/' || input.back() == '\\')
     {
-        /// 从最后一个分隔符开始向前找空格
+        /// 向前查找空格以确定路径开始位置
         size_t start = input.length() - 1;
         while (start > 0 && input[start - 1] != ' ')
         {
             --start;
         }
-        return input.substr(start);
+        return std::string(input.substr(start));
     }
 
-    /// 情况2：查找最后一个分隔符后的部分
-    if (lastSlash != std::string::npos)
+    /// 查找最后一个空格位置
+    size_t           lastSpace = input.find_last_of(' ');
+    size_t           pathStart = (lastSpace != std::string_view::npos) ? lastSpace + 1 : 0;
+    std::string_view lastPart  = input.substr(pathStart);
+
+    /// 情况2：最后一个部分本身就是路径
+    if (isPathInput(lastPart))
+    {
+        return std::string(lastPart);
+    }
+
+    /// 情况3：检查是否包含路径分隔符但可能不完整
+    size_t lastSlash = input.find_last_of("/\\");
+    if (lastSlash != std::string_view::npos && lastSlash >= pathStart)
     {
         /// 从最后一个分隔符开始，向前找空格或开头
-        size_t start = lastSlash;
-        while (start > 0 && input[start - 1] != ' ')
+        size_t slashStart = lastSlash;
+        while (slashStart > pathStart && input[slashStart - 1] != ' ')
         {
-            --start;
+            --slashStart;
         }
-        std::string candidate = input.substr(start);
 
-        /// 验证这是否是合理的路径部分
-        if (isPathInput(candidate))
+        std::string_view candidate = input.substr(slashStart);
+        /// 验证候选字符串是否包含有效的路径模式
+        if (candidate.find('/') != std::string_view::npos || candidate.find('\\') != std::string_view::npos ||
+            candidate.starts_with(".") || candidate.starts_with(".."))
         {
-            return candidate;
-        }
-    }
-
-    /// 情况3：检查最后一个单词是否是路径
-    if (lastSpace != std::string::npos)
-    {
-        std::string lastPart = input.substr(lastSpace + 1);
-        if (isPathInput(lastPart))
-        {
-            return lastPart;
+            return std::string(candidate);
         }
     }
 
-    /// 情况4：没有空格，整个输入可能是路径
-    else if (isPathInput(input))
+    /// 情况4：检查相对路径的特殊情况
+    if (lastPart.starts_with(".") || lastPart.starts_with(".."))
     {
-        return input;
+        return std::string(lastPart);
     }
 
-    /// 情况5：最后一个字符是点（可能是相对路径的开始）
-    if (!input.empty() && input.back() == '.')
+    /// 情况5：检查Windows驱动器模式
+    if (lastPart.length() >= 2 && lastPart[1] == ':' &&
+        ((lastPart[0] >= 'A' && lastPart[0] <= 'Z') || (lastPart[0] >= 'a' && lastPart[0] <= 'z')))
     {
-        size_t dotPos = input.find_last_of('.');
-        if (dotPos != std::string::npos)
-        {
-            size_t start = dotPos;
-            while (start > 0 && input[start - 1] != ' ')
-            {
-                --start;
-            }
-            std::string candidate = input.substr(start);
-
-            /// 检查是否是相对路径
-            if (candidate == "." || candidate.starts_with("./") || candidate.starts_with(".\\") || candidate == ".." ||
-                candidate.starts_with("../") || candidate.starts_with("..\\"))
-            {
-                return candidate;
-            }
-        }
+        return std::string(lastPart);
     }
 
     return "";
 }
 
-auto XFile::isPathInput(const std::string& input) -> bool
+auto XFile::isPathInput(const std::string_view& input) -> bool
 {
     if (input.empty())
         return false;
@@ -133,13 +117,13 @@ auto XFile::isPathInput(const std::string& input) -> bool
     {
         /// 排除纯数字带点的情况（如版本号）
         std::regex versionRegex(R"(^\d+(\.\d+)*$)");
-        if (!std::regex_match(input, versionRegex))
+        if (!std::regex_match(std::string(input), versionRegex))
         {
             /// 检查是否可能是文件扩展名
             size_t lastDot = input.find_last_of('.');
             if (lastDot > 0 && lastDot < input.length() - 1)
             {
-                std::string extension = input.substr(lastDot + 1);
+                std::string_view extension = input.substr(lastDot + 1);
                 /// 简单的扩展名检查
                 bool looksLikeExtension = true;
                 for (char c : extension)
@@ -364,13 +348,13 @@ bool XFile::isUnixExecutable(const fs::path& path)
 }
 #endif
 
-bool XFile::isExecutable(const std::string& path)
+auto XFile::isExecutable(const std::string_view& path) -> bool
 {
     try
     {
         fs::path p(path);
 
-        // 先检查是否是常规文件
+        /// 先检查是否是常规文件
         if (!fs::is_regular_file(p))
         {
             return false;
@@ -844,9 +828,9 @@ bool XFile::setCurrentWorkingDirectory(const std::string& path)
     return false;
 }
 
-// ==================== 配置 ====================
+/// ==================== 配置 ====================
 
-bool XFile::shouldShowHiddenFiles()
+auto XFile::shouldShowHiddenFiles() -> bool
 {
     return g_showHiddenFiles;
 }

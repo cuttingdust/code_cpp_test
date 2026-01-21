@@ -73,6 +73,12 @@ message("indicators_FOUND = ${indicators_FOUND}")
 message("indicators_VERSION = ${indicators_VERSION}")
 message("indicators_LIBS = ${indicators_LIBS}")
 
+# nlohmann_json
+find_package(nlohmann_json CONFIG REQUIRED)
+message("nlohmann_json_FOUND = ${nlohmann_json_FOUND}")
+message("nlohmann_json_VERSION = ${nlohmann_json_VERSION}")
+message("nlohmann_json_LIBS = ${nlohmann_json_LIBS}")
+
 # OpenCV
 find_package(OpenCV CONFIG REQUIRED)
 message("OpenCV_FOUND = ${OpenCV_FOUND}")

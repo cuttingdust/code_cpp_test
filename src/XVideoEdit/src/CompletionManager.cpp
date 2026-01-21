@@ -1,187 +1,252 @@
-﻿// CompletionManager.cpp
-#include "CompletionManager.h"
+﻿#include "CompletionManager.h"
+#include "XFile.h"
+#include "XTool.h"
+
 #include <algorithm>
 #include <ranges>
 #include <set>
 
-CompletionManager::CompletionManager(std::map<std::string, std::shared_ptr<XTask>, std::less<>>& tasks) : tasks_(tasks)
+class CompletionManager::PImpl
+{
+public:
+    PImpl(CompletionManager* owenr);
+    PImpl(CompletionManager* owenr, XTask::List tasks);
+    ~PImpl() = default;
+
+public:
+    auto handleBuiltCommand(Completions& completions) -> void;
+
+    /// \brief 路径补全
+    /// \param[in] ctx 上下文
+    /// \param[out] completions
+    /// \param[out] contextLen
+    auto handlePathCompletion(const CompletionContext& ctx, Completions& completions, int& contextLen) -> void;
+
+    auto handleCommandCompletion(const std::string_view& input, const CompletionContext& ctx, Completions& completions)
+            -> void;
+
+    auto handleTaskCompletion(const std::string_view& input, const CompletionContext& ctx, Completions& completions,
+                              int& contextLen) -> void;
+
+public:
+    /// 路径补全
+    auto completePathSmart(std::string_view partialPath, Completions& completions, int& contextLen) -> void;
+
+    /// task 相关补全
+    auto handleEmptyTaskInput(Completions& completions) -> void;
+
+    auto handleTaskNameCompletion(const std::vector<std::string>& tokens, Completions& completions) -> void;
+
+    auto handleTaskParamCompletion(const std::vector<std::string>& tokens, XTask::Ptr task,
+                                   const std::string_view& originalInput, Completions& completions, int& contextLen)
+            -> void;
+
+public:
+    auto collectCompletions(const fs::path& basePath, const std::string& matchPrefix, Completions& completions) -> void;
+
+    auto addCompletion(const fs::directory_entry& entry, const std::string_view& name, Completions& completions)
+            -> void;
+
+    auto sortCompletions(Completions& completions) -> void;
+
+    auto createContext(const std::string_view& input) const -> CompletionContext;
+
+    auto shouldCompletePath(const std::string_view& lastPart) const -> bool;
+
+    auto extractPathPartForHint(const std::string_view& input) const -> std::string;
+
+public:
+    CompletionManager*       owenr_ = nullptr;
+    XTask::List              tasks_;
+    std::vector<std::string> builtinCommands_;
+};
+
+CompletionManager::PImpl::PImpl(CompletionManager* owenr) : owenr_(owenr)
 {
 }
 
-CompletionManager::CompletionContext CompletionManager::analyzeInput(std::string_view input) const
+CompletionManager::PImpl::PImpl(CompletionManager* owenr, XTask::List tasks) : owenr_(owenr), tasks_(std::move(tasks))
 {
-    CompletionContext ctx;
-
-    if (input.empty())
-    {
-        ctx.pathPart         = "";
-        ctx.prefix           = "";
-        ctx.isPathCompletion = false;
-        return ctx;
-    }
-
-    size_t lastSpace = input.find_last_of(' ');
-
-    if (lastSpace != std::string_view::npos)
-    {
-        ctx.prefix           = std::string(input.substr(0, lastSpace + 1));
-        ctx.pathPart         = std::string(input.substr(lastSpace + 1));
-        ctx.isPathCompletion = shouldCompletePath(ctx.pathPart);
-    }
-    else
-    {
-        ctx.pathPart         = std::string(input);
-        ctx.isPathCompletion = shouldCompletePath(ctx.pathPart);
-    }
-
-    // 处理 task 命令的特殊情况
-    if (input.starts_with("task "))
-    {
-        auto tokens = XTool::split(std::string(input));
-        if (tokens.size() >= 3)
-        {
-            const std::string& lastToken = tokens.back();
-            if (shouldCompletePath(lastToken))
-            {
-                size_t pos = input.rfind(lastToken);
-                if (pos != std::string_view::npos)
-                {
-                    ctx.prefix           = std::string(input.substr(0, pos));
-                    ctx.pathPart         = lastToken;
-                    ctx.isPathCompletion = true;
-                }
-            }
-        }
-    }
-
-    return ctx;
 }
 
-bool CompletionManager::shouldCompletePath(const std::string& lastPart) const
+
+auto CompletionManager::PImpl::handleBuiltCommand(Completions& completions) -> void
 {
-    return XFile::isPathInput(lastPart) || lastPart.find('/') != std::string::npos ||
-            lastPart.find('\\') != std::string::npos || lastPart.find('.') != std::string::npos;
+    for (const auto& cmd : builtinCommands_)
+    {
+        completions.emplace_back(cmd, replxx::Replxx::Color::BRIGHTGREEN);
+    }
+    completions.emplace_back("task", replxx::Replxx::Color::YELLOW);
 }
 
-replxx::Replxx::completions_t CompletionManager::completionHook(const std::string& input, int& contextLen)
+auto CompletionManager::PImpl::handlePathCompletion(const CompletionContext& ctx, Completions& completions,
+                                                    int& contextLen) -> void
 {
-    replxx::Replxx::completions_t completions;
-    contextLen = static_cast<int>(input.length());
+    contextLen         = static_cast<int>(ctx.pathPart.length());
+    int tempContextLen = contextLen;
+    completePathSmart(ctx.pathPart, completions, tempContextLen);
+    contextLen = tempContextLen;
+}
 
-    // 特殊处理空输入
-    if (input.empty())
+auto CompletionManager::PImpl::handleCommandCompletion(const std::string_view& input, const CompletionContext& ctx,
+                                                       Completions& completions) -> void
+{
+    /// 使用动态获取的内置命令列表
+    for (const auto& cmd : builtinCommands_)
     {
-        contextLen                                            = 0;
-        static const std::vector<std::string> builtinCommands = { "exit", "help", "list" };
-        for (const auto& cmd : builtinCommands)
+        if (cmd.starts_with(ctx.pathPart))
         {
             completions.emplace_back(cmd, replxx::Replxx::Color::BRIGHTGREEN);
         }
+    }
+
+    if (std::string("task").starts_with(ctx.pathPart))
+    {
         completions.emplace_back("task", replxx::Replxx::Color::YELLOW);
-        return completions;
     }
-
-    // 分析输入上下文
-    CompletionContext ctx = analyzeInput(input);
-
-    // 路径补全优先级最高
-    if (ctx.isPathCompletion && !ctx.pathPart.empty())
-    {
-        handlePathCompletion(ctx, completions, contextLen);
-        if (!completions.empty())
-        {
-            return completions;
-        }
-    }
-
-    // Task命令补全
-    if (input.starts_with("task "))
-    {
-        handleTaskCompletion(input, ctx, completions, contextLen);
-    }
-    else
-    {
-        handleCommandCompletion(input, ctx, completions);
-    }
-
-    return completions;
 }
 
-void CompletionManager::handleTaskCompletion(const std::string& input, const CompletionContext& ctx,
-                                             replxx::Replxx::completions_t& completions, int& contextLen)
+auto CompletionManager::PImpl::handleTaskCompletion(const std::string_view& input, const CompletionContext& ctx,
+                                                    Completions& completions, int& contextLen) -> void
 {
     auto tokens = XTool::split(input);
 
-    // 计算要替换的部分长度
+    /// 计算要替换的部分长度
     size_t lastSpace = input.find_last_of(' ');
     if (lastSpace != std::string::npos)
     {
         contextLen = static_cast<int>(input.length() - lastSpace - 1);
     }
 
-    // =============== 特殊处理输入以空格结尾的情况 ===============
+    /// 特殊处理输入以空格结尾的情况
     if (input.back() == ' ')
     {
-        contextLen = 0; // 在光标位置插入
+        contextLen = 0; /// 在光标位置插入
 
-        // 输入以空格结尾，分析已完成的部分
-        if (tokens.size() == 1) // 例如: "task "
+        if (tokens.size() == 1) /// 例如: "task "
         {
             handleEmptyTaskInput(completions);
         }
-        else if (tokens.size() == 2) // 例如: "task calculate "
+        else if (tokens.size() == 2) /// 例如: "task calculate "
         {
             handleTaskNameCompletion(tokens, completions);
         }
-        else if (tokens.size() >= 3) // 例如: "task calculate -x 2.0 "
+        else if (tokens.size() >= 3) /// 例如: "task calculate -x 2.0 "
         {
             std::string taskName = tokens[1];
             auto        taskIt   = tasks_.find(taskName);
             if (taskIt != tasks_.end())
             {
-                // 传入 input 参数
                 handleTaskParamCompletion(tokens, taskIt->second, input, completions, contextLen);
             }
         }
-        return; // 直接返回，不再执行后续逻辑
+        return;
     }
-    // =============== 特殊处理结束 ===============
 
-    if (tokens.size() == 1) // 只有 "task"
+    if (tokens.size() == 1) /// 只有 "task"
     {
         handleEmptyTaskInput(completions);
     }
-    else if (tokens.size() == 2) // task <任务名>
+    else if (tokens.size() == 2) /// task <任务名>
     {
         handleTaskNameCompletion(tokens, completions);
     }
-    else if (tokens.size() >= 3) // task <任务名> <参数...>
+    else if (tokens.size() >= 3) /// task <任务名> <参数...>
     {
         std::string taskName = tokens[1];
         auto        taskIt   = tasks_.find(taskName);
         if (taskIt != tasks_.end())
         {
-            // 传入 input 参数
             handleTaskParamCompletion(tokens, taskIt->second, input, completions, contextLen);
         }
     }
 }
 
-void CompletionManager::handleEmptyTaskInput(replxx::Replxx::completions_t& completions)
+auto CompletionManager::PImpl::completePathSmart(std::string_view partialPath, Completions& completions,
+                                                 int& contextLen) -> void
 {
-    for (const auto& [name, _] : tasks_)
+    try
+    {
+        int      originalContextLen = contextLen;
+        fs::path inputPath(partialPath);
+
+        if (partialPath.empty())
+        {
+            inputPath  = ".";
+            contextLen = 0;
+        }
+
+        fs::path    basePath;
+        std::string matchPrefix;
+
+        if (fs::exists(inputPath) && fs::is_directory(inputPath))
+        {
+            basePath    = inputPath;
+            matchPrefix = "";
+            contextLen  = 0;
+        }
+        else
+        {
+            basePath    = inputPath.parent_path();
+            matchPrefix = inputPath.filename().string();
+
+            if (basePath.empty())
+            {
+                basePath = ".";
+            }
+
+            fs::path testPath = basePath / matchPrefix;
+            if (fs::exists(testPath) && fs::is_regular_file(testPath))
+            {
+                contextLen = 0;
+                return;
+            }
+
+            contextLen = static_cast<int>(matchPrefix.length());
+        }
+
+        basePath = fs::absolute(basePath);
+
+        if (!fs::exists(basePath) || !fs::is_directory(basePath))
+        {
+            contextLen = originalContextLen;
+            return;
+        }
+
+        collectCompletions(basePath, matchPrefix, completions);
+
+        if (completions.size() == 1)
+        {
+            const std::string& completionText = completions[0].text();
+            if (completionText == matchPrefix || completionText == matchPrefix + XFile::separator())
+            {
+                contextLen = static_cast<int>(matchPrefix.length());
+            }
+        }
+
+        sortCompletions(completions);
+    }
+    catch (...)
+    {
+        contextLen = static_cast<int>(partialPath.length());
+    }
+}
+
+auto CompletionManager::PImpl::handleEmptyTaskInput(Completions& completions) -> void
+{
+    for (const auto& name : tasks_ | std::views::keys)
     {
         completions.emplace_back(name, replxx::Replxx::Color::BRIGHTBLUE);
     }
 }
 
-void CompletionManager::handleTaskNameCompletion(const std::vector<std::string>& tokens,
-                                                 replxx::Replxx::completions_t&  completions)
+auto CompletionManager::PImpl::handleTaskNameCompletion(const std::vector<std::string>& tokens,
+                                                        Completions&                    completions) -> void
 {
-    std::string taskPart      = tokens[1];
-    bool        hasExactMatch = false;
+    const std::string& taskPart      = tokens[1];
+    bool               hasExactMatch = false;
 
-    for (const auto& [name, _] : tasks_)
+    for (const auto& name : tasks_ | std::views::keys)
     {
         if (name == taskPart)
         {
@@ -192,7 +257,7 @@ void CompletionManager::handleTaskNameCompletion(const std::vector<std::string>&
 
     if (!hasExactMatch)
     {
-        for (const auto& [name, _] : tasks_)
+        for (const auto& name : tasks_ | std::views::keys)
         {
             if (name.starts_with(taskPart))
             {
@@ -202,8 +267,7 @@ void CompletionManager::handleTaskNameCompletion(const std::vector<std::string>&
     }
     else
     {
-        auto taskIt = tasks_.find(taskPart);
-        if (taskIt != tasks_.end())
+        if (const auto taskIt = tasks_.find(taskPart); taskIt != tasks_.end())
         {
             for (const auto& param : taskIt->second->getParameters())
             {
@@ -213,18 +277,17 @@ void CompletionManager::handleTaskNameCompletion(const std::vector<std::string>&
     }
 }
 
-void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>& tokens, std::shared_ptr<XTask> task,
-                                                  const std::string&             originalInput,
-                                                  replxx::Replxx::completions_t& completions, int& contextLen)
+auto CompletionManager::PImpl::handleTaskParamCompletion(const std::vector<std::string>& tokens, XTask::Ptr task,
+                                                         const std::string_view& originalInput,
+                                                         Completions& completions, int& contextLen) -> void
 {
     const auto& taskParams = task->getParameters();
 
-    // =============== 首先检查输入是否以空格结尾 ===============
+    /// 检查输入是否以空格结尾
     bool inputEndsWithSpace = !originalInput.empty() && originalInput.back() == ' ';
 
-    // 收集已使用的参数名
+    /// 收集已使用的参数名
     std::set<std::string> usedParams;
-
     for (size_t i = 2; i < tokens.size(); i++)
     {
         if (tokens[i].starts_with('-'))
@@ -233,7 +296,7 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
         }
     }
 
-    // 如果输入以空格结尾，直接显示未使用的参数
+    /// 如果输入以空格结尾，显示未使用的参数
     if (inputEndsWithSpace)
     {
         for (const auto& param : taskParams)
@@ -243,48 +306,26 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
                 completions.emplace_back(param.getName(), replxx::Replxx::Color::CYAN);
             }
         }
-        return; // 直接返回
+        return;
     }
 
-    // 继续处理非空格结尾的情况
     std::string lastToken = tokens.back();
 
-    // 收集参数值的配对信息
+    /// 收集参数值的配对信息
     std::set<std::string> paramsWithValue;
-    std::set<std::string> fileParams; // 文件参数
-    std::set<std::string> dirParams;  // 目录参数
-
     for (size_t i = 2; i < tokens.size(); i++)
     {
         if (tokens[i].starts_with('-'))
         {
-            // 查找参数定义
-            auto paramIt =
-                    std::ranges::find_if(taskParams, [&tokens, i](const auto& p) { return p.getName() == tokens[i]; });
-
-            if (paramIt != taskParams.end())
-            {
-                // 检查参数类型
-                if (paramIt->getType() == Parameter::Type::File)
-                {
-                    fileParams.insert(tokens[i]);
-                }
-                else if (paramIt->getType() == Parameter::Type::Directory)
-                {
-                    dirParams.insert(tokens[i]);
-                }
-            }
-
-            // 如果下一个token存在且不是参数名，则这个参数已经有值了
             if (i + 1 < tokens.size() && !tokens[i + 1].starts_with('-'))
             {
                 paramsWithValue.insert(tokens[i]);
-                i++; // 跳过值
+                i++; /// 跳过值
             }
         }
     }
 
-    // 检查倒数第二个token是否是参数名
+    /// 检查倒数第二个token是否是参数名
     bool            secondLastIsParam = false;
     std::string     secondLastToken;
     Parameter::Type secondLastParamType = Parameter::Type::String;
@@ -295,10 +336,8 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
         if (secondLastToken.starts_with('-'))
         {
             secondLastIsParam = true;
-
-            // 查找这个参数的类型
-            auto paramIt = std::ranges::find_if(taskParams, [&secondLastToken](const auto& p)
-                                                { return p.getName() == secondLastToken; });
+            auto paramIt      = std::ranges::find_if(taskParams, [&secondLastToken](const auto& p)
+                                                     { return p.getName() == secondLastToken; });
 
             if (paramIt != taskParams.end())
             {
@@ -307,27 +346,24 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
         }
     }
 
-    // =============== 处理路径类型参数的特殊逻辑 ===============
+    /// 处理路径类型参数的特殊逻辑
     if (secondLastIsParam &&
         (secondLastParamType == Parameter::Type::File || secondLastParamType == Parameter::Type::Directory))
     {
-        // 当前正在输入文件/目录路径
-        // 让路径补全系统处理
         if (shouldCompletePath(lastToken))
         {
-            // 路径补全
+            /// 路径补全
             return;
         }
-        // 如果不是路径，应该显示参数值的补全
     }
 
-    // 如果最后一个token以'-'开头，检查它是否已经配对了一个值
+    /// 如果最后一个token以'-'开头
     if (lastToken.starts_with('-'))
     {
-        // 检查这个参数是否已经有值
+        /// 检查这个参数是否已经有值
         if (paramsWithValue.contains(lastToken))
         {
-            // 这个参数已经有值了，应该补全新参数
+            /// 补全新参数
             for (const auto& param : taskParams)
             {
                 if (!usedParams.contains(param.getName()))
@@ -338,7 +374,7 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
         }
         else
         {
-            // 检查这个参数名是否完全匹配
+            /// 检查这个参数名是否完全匹配
             bool isExactParam = false;
             for (const auto& param : taskParams)
             {
@@ -351,14 +387,13 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
 
             if (isExactParam)
             {
-                // 参数名完全匹配，应该显示参数值的补全
+                /// 参数名完全匹配，显示参数值的补全
                 auto paramIt = std::ranges::find_if(taskParams,
                                                     [&lastToken](const auto& p) { return p.getName() == lastToken; });
 
                 if (paramIt != taskParams.end())
                 {
-                    auto paramCompletions = paramIt->getCompletions("");
-                    for (const auto& comp : paramCompletions)
+                    for (const auto& comp : paramIt->getCompletions(""))
                     {
                         replxx::Replxx::Color color = replxx::Replxx::Color::MAGENTA;
                         if (paramIt->getType() == Parameter::Type::Int || paramIt->getType() == Parameter::Type::Double)
@@ -390,10 +425,10 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
             std::string secondLastToken = tokens[tokens.size() - 2];
             if (secondLastToken.starts_with('-'))
             {
-                // 检查这个参数是否已经有值（防止重复值）
+                // 检查这个参数是否已经有值
                 if (paramsWithValue.contains(secondLastToken))
                 {
-                    // 这个参数已经有值了，应该补全新参数
+                    // 补全新参数
                     for (const auto& param : taskParams)
                     {
                         if (!usedParams.contains(param.getName()))
@@ -410,37 +445,29 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
 
                     if (paramIt != taskParams.end())
                     {
+                        // 使用参数自身的补全建议
                         auto paramCompletions = paramIt->getCompletions(lastToken);
 
-                        // 如果是字符串参数且需要路径补全
-                        if (paramIt->getType() == Parameter::Type::String && shouldCompletePath(lastToken))
+                        // 如果是文件/目录类型且输入看起来像路径，让路径补全处理
+                        if ((paramIt->getType() == Parameter::Type::File ||
+                             paramIt->getType() == Parameter::Type::Directory ||
+                             paramIt->getType() == Parameter::Type::String) &&
+                            shouldCompletePath(lastToken))
                         {
-                            int                           tempContextLen = static_cast<int>(lastToken.length());
-                            replxx::Replxx::completions_t pathCompletions;
+                            int         tempContextLen = static_cast<int>(lastToken.length());
+                            Completions pathCompletions;
                             completePathSmart(lastToken, pathCompletions, tempContextLen);
                             for (const auto& pc : pathCompletions)
                             {
                                 completions.emplace_back(pc);
                             }
                         }
-
-                        for (const auto& comp : paramCompletions)
-                        {
-                            replxx::Replxx::Color color = replxx::Replxx::Color::MAGENTA;
-                            if (paramIt->getType() == Parameter::Type::Int ||
-                                paramIt->getType() == Parameter::Type::Double)
-                            {
-                                color = replxx::Replxx::Color::BRIGHTCYAN;
-                            }
-                            completions.emplace_back(comp, color);
-                        }
                     }
                 }
             }
             else
             {
-                // 倒数第二个token也不是参数名，说明这个token可能是一个错误的参数值
-                // 或者用户可能想输入新参数
+                // 补全新参数
                 for (const auto& param : taskParams)
                 {
                     if (!usedParams.contains(param.getName()))
@@ -452,7 +479,6 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
         }
         else
         {
-            // tokens.size() < 3，说明只有任务名和可能的参数值
             // 直接补全所有参数
             for (const auto& param : taskParams)
             {
@@ -465,116 +491,8 @@ void CompletionManager::handleTaskParamCompletion(const std::vector<std::string>
     }
 }
 
-void CompletionManager::handleCommandCompletion(const std::string& input, const CompletionContext& ctx,
-                                                replxx::Replxx::completions_t& completions)
-{
-    static const std::vector<std::string> builtinCommands = { "exit", "help", "list" };
-    for (const auto& cmd : builtinCommands)
-    {
-        if (cmd.starts_with(ctx.pathPart))
-        {
-            completions.emplace_back(cmd, replxx::Replxx::Color::BRIGHTGREEN);
-        }
-    }
-
-    if (std::string("task").starts_with(ctx.pathPart))
-    {
-        completions.emplace_back("task", replxx::Replxx::Color::YELLOW);
-    }
-}
-
-void CompletionManager::handlePathCompletion(const CompletionContext& ctx, replxx::Replxx::completions_t& completions,
-                                             int& contextLen)
-{
-    contextLen         = static_cast<int>(ctx.pathPart.length());
-    int tempContextLen = contextLen;
-    completePathSmart(ctx.pathPart, completions, tempContextLen);
-    contextLen = tempContextLen;
-}
-
-void CompletionManager::completePathSmart(std::string_view partialPath, replxx::Replxx::completions_t& completions,
-                                          int& contextLen)
-{
-    try
-    {
-        // 保存原始上下文长度（用户要替换的部分）
-        int originalContextLen = contextLen;
-
-        fs::path inputPath(partialPath);
-
-        if (partialPath.empty())
-        {
-            inputPath  = ".";
-            contextLen = 0;
-        }
-
-        // 确定搜索路径和匹配前缀
-        fs::path    basePath;
-        std::string matchPrefix;
-
-        if (fs::exists(inputPath) && fs::is_directory(inputPath))
-        {
-            basePath    = inputPath;
-            matchPrefix = "";
-            contextLen  = 0; // 在目录后面追加，不替换任何内容
-        }
-        else
-        {
-            basePath    = inputPath.parent_path();
-            matchPrefix = inputPath.filename().string();
-
-            // 关键修复：当输入已经是完整文件名时，contextLen应该为0
-            if (basePath.empty())
-            {
-                basePath = ".";
-            }
-
-            // 检查这个文件名是否已经存在
-            fs::path testPath = basePath / matchPrefix;
-            if (fs::exists(testPath) && fs::is_regular_file(testPath))
-            {
-                // 文件已经存在，不需要替换，直接返回空
-                contextLen = 0;
-                return;
-            }
-
-            // 否则，替换匹配前缀
-            contextLen = static_cast<int>(matchPrefix.length());
-        }
-
-        basePath = fs::absolute(basePath);
-
-        if (!fs::exists(basePath) || !fs::is_directory(basePath))
-        {
-            contextLen = originalContextLen; // 恢复原始值
-            return;
-        }
-
-        // 收集补全项
-        collectCompletions(basePath, matchPrefix, completions);
-
-        // 如果只有一个补全项且完全匹配，设置contextLen为文件名长度
-        if (completions.size() == 1)
-        {
-            const std::string& completionText = completions[0].text();
-            if (completionText == matchPrefix || completionText == matchPrefix + XFile::separator())
-            {
-                contextLen = static_cast<int>(matchPrefix.length());
-            }
-        }
-
-        // 排序（目录优先）
-        sortCompletions(completions);
-    }
-    catch (...)
-    {
-        // 忽略错误，但要恢复contextLen
-        contextLen = static_cast<int>(partialPath.length());
-    }
-}
-
-void CompletionManager::collectCompletions(const fs::path& basePath, const std::string& matchPrefix,
-                                           replxx::Replxx::completions_t& completions)
+auto CompletionManager::PImpl::collectCompletions(const fs::path& basePath, const std::string& matchPrefix,
+                                                  Completions& completions) -> void
 {
     for (const auto& entry : fs::directory_iterator(basePath, fs::directory_options::skip_permission_denied))
     {
@@ -594,15 +512,15 @@ void CompletionManager::collectCompletions(const fs::path& basePath, const std::
     }
 }
 
-void CompletionManager::addCompletion(const fs::directory_entry& entry, const std::string& name,
-                                      replxx::Replxx::completions_t& completions)
+auto CompletionManager::PImpl::addCompletion(const fs::directory_entry& entry, const std::string_view& name,
+                                             Completions& completions) -> void
 {
     std::string           completion;
     replxx::Replxx::Color color = replxx::Replxx::Color::DEFAULT;
 
     if (fs::is_directory(entry.path()))
     {
-        completion = name + XFile::separator();
+        completion = std::string{ name } + XFile::separator();
         color      = replxx::Replxx::Color::BRIGHTBLUE;
     }
     else
@@ -617,30 +535,153 @@ void CompletionManager::addCompletion(const fs::directory_entry& entry, const st
     completions.emplace_back(completion, color);
 }
 
-void CompletionManager::sortCompletions(replxx::Replxx::completions_t& completions)
+auto CompletionManager::PImpl::sortCompletions(Completions& completions) -> void
 {
-    std::sort(completions.begin(), completions.end(),
-              [](const auto& a, const auto& b)
-              {
-                  bool aIsDir = !a.text().empty() && (a.text().back() == '/' || a.text().back() == '\\');
-                  bool bIsDir = !b.text().empty() && (b.text().back() == '/' || b.text().back() == '\\');
+    std::ranges::sort(completions,
+                      [](const auto& a, const auto& b)
+                      {
+                          bool aIsDir = !a.text().empty() && (a.text().back() == '/' || a.text().back() == '\\');
+                          bool bIsDir = !b.text().empty() && (b.text().back() == '/' || b.text().back() == '\\');
 
-                  if (aIsDir != bIsDir)
-                      return aIsDir > bIsDir;
-                  return a.text() < b.text();
-              });
+                          if (aIsDir != bIsDir)
+                              return aIsDir > bIsDir;
+                          return a.text() < b.text();
+                      });
 }
 
-replxx::Replxx::hints_t CompletionManager::hintHook(const std::string& input, int& contextLen,
-                                                    replxx::Replxx::Color& color)
+auto CompletionManager::PImpl::createContext(const std::string_view& input) const -> CompletionContext
 {
-    replxx::Replxx::hints_t hints;
-    color = replxx::Replxx::Color::GRAY;
+    CompletionContext ctx;
+
+    if (input.empty())
+    {
+        ctx.pathPart         = "";
+        ctx.prefix           = "";
+        ctx.isPathCompletion = false;
+        return ctx;
+    }
+
+    size_t lastSpace = input.find_last_of(' ');
+
+    if (lastSpace != std::string_view::npos)
+    {
+        ctx.prefix           = input.substr(0, lastSpace + 1);
+        ctx.pathPart         = input.substr(lastSpace + 1);
+        ctx.isPathCompletion = shouldCompletePath(ctx.pathPart);
+    }
+    else
+    {
+        ctx.pathPart         = input;
+        ctx.isPathCompletion = shouldCompletePath(ctx.pathPart);
+    }
+
+    /// 处理 task 命令的特殊情况
+    if (input.starts_with("task "))
+    {
+        auto tokens = XTool::split(std::string(input));
+        if (tokens.size() >= 3)
+        {
+            const std::string& lastToken = tokens.back();
+            if (shouldCompletePath(lastToken))
+            {
+                size_t pos = input.rfind(lastToken);
+                if (pos != std::string_view::npos)
+                {
+                    ctx.prefix           = input.substr(0, pos);
+                    ctx.pathPart         = lastToken;
+                    ctx.isPathCompletion = true;
+                }
+            }
+        }
+    }
+
+    return ctx;
+}
+
+auto CompletionManager::PImpl::shouldCompletePath(const std::string_view& lastPart) const -> bool
+{
+    return XFile::isPathInput(lastPart) || lastPart.find('.') != std::string::npos;
+}
+
+auto CompletionManager::PImpl::extractPathPartForHint(const std::string_view& input) const -> std::string
+{
+    return XFile::extractPathPart(input);
+}
+
+CompletionManager::CompletionManager() : impl_(std::make_unique<CompletionManager::PImpl>(this))
+{
+}
+
+CompletionManager::CompletionManager(XTask::List& tasks) :
+    impl_(std::make_unique<CompletionManager::PImpl>(this, tasks))
+{
+}
+
+CompletionManager::~CompletionManager() = default;
+
+auto CompletionManager::registerBuiltinCommand(const std::string_view& command) -> void
+{
+    if (std::ranges::find(impl_->builtinCommands_, command) == impl_->builtinCommands_.end())
+    {
+        impl_->builtinCommands_.emplace_back(command);
+        std::ranges::sort(impl_->builtinCommands_);
+        impl_->builtinCommands_.erase(std::ranges::unique(impl_->builtinCommands_).begin(),
+                                      impl_->builtinCommands_.end());
+    }
+}
+
+auto CompletionManager::getBuiltinCommands() const -> const std::vector<std::string>&
+{
+    return impl_->builtinCommands_;
+}
+
+auto CompletionManager::completionHook(const std::string_view& input, int& contextLen) -> Completions
+{
+    Completions completions;
+    contextLen = static_cast<int>(input.length());
+
+    /// 特殊处理空输入
+    if (input.empty())
+    {
+        contextLen = 0;
+        impl_->handleBuiltCommand(completions);
+        return completions;
+    }
+
+    /// 分析输入上下文
+    CompletionContext ctx = impl_->createContext(input);
+    if (ctx.isPathCompletion && !ctx.pathPart.empty())
+    {
+        /// 路径补全优先级最高
+        impl_->handlePathCompletion(ctx, completions, contextLen);
+        if (!completions.empty())
+        {
+            return completions;
+        }
+    }
+
+    /// Task命令补全
+    if (input.starts_with("task "))
+    {
+        impl_->handleTaskCompletion(input, ctx, completions, contextLen);
+    }
+    else
+    {
+        impl_->handleCommandCompletion(input, ctx, completions);
+    }
+
+    return completions;
+}
+
+auto CompletionManager::hintHook(const std::string_view& input, int& contextLen, Color& color) -> Hints
+{
+    Hints hints;
+    color = Color::GRAY;
 
     if (input.empty())
         return hints;
 
-    std::string pathPart = extractPathPartForHint(input);
+    std::string pathPart = impl_->extractPathPartForHint(input);
     if (pathPart.empty())
         return hints;
 
@@ -668,7 +709,7 @@ replxx::Replxx::hints_t CompletionManager::hintHook(const std::string& input, in
                 }
             }
         }
-        else if (shouldCompletePath(pathPart))
+        else if (impl_->shouldCompletePath(pathPart))
         {
             hints.emplace_back(" [按 Tab 键补全]");
         }
@@ -684,7 +725,15 @@ replxx::Replxx::hints_t CompletionManager::hintHook(const std::string& input, in
     return hints;
 }
 
-std::string CompletionManager::extractPathPartForHint(const std::string& input) const
+auto CompletionManager::setTaskList(const XTask::List& tasks) -> void
 {
-    return XFile::extractPathPart(input);
+    impl_->tasks_ = tasks;
+}
+
+auto CompletionManager::registerTaskCommand(const std::string_view& command, const XTask::Ptr& task) -> void
+{
+    if (!impl_->tasks_.contains(command) && task)
+    {
+        impl_->tasks_.emplace(command, task);
+    }
 }

@@ -1,19 +1,13 @@
 ﻿/// XFile.h
 #pragma once
-#include <string>
-#include <vector>
-#include <filesystem>
-#include <functional>
-#include <optional>
-
-namespace fs = std::filesystem;
+#include "XConst.h"
 
 class XFile
 {
 public:
     /// ==================== 路径操作 ====================
-    static auto        extractPathPart(const std::string& input) -> std::string;
-    static auto        isPathInput(const std::string& input) -> bool;
+    static auto        extractPathPart(const std::string_view& input) -> std::string;
+    static auto        isPathInput(const std::string_view& input) -> bool;
     static bool        isRelativePath(const std::string& path);
     static std::string normalizePath(const std::string& path);
     static std::string getParentPath(const std::string& path);
@@ -24,7 +18,7 @@ public:
     static bool fileExists(const std::string& path);
     static bool isDirectory(const std::string& path);
     static bool isRegularFile(const std::string& path);
-    static bool isExecutable(const std::string& path);
+    static auto isExecutable(const std::string_view& path) -> bool;
     static bool isHiddenFile(const std::string& path);
 
     /// ==================== 目录遍历 ====================
@@ -69,8 +63,8 @@ public:
     static bool        setCurrentWorkingDirectory(const std::string& path);
 
     /// ==================== 配置 ====================
-    static bool shouldShowHiddenFiles();
-    static void setShowHiddenFiles(bool show);
+    static auto shouldShowHiddenFiles() -> bool;
+    static auto setShowHiddenFiles(bool show) -> void;
 
 private:
     /// 私有构造函数，这是一个工具类

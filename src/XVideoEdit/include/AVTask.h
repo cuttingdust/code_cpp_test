@@ -8,13 +8,13 @@
 
 class XExec;
 
-class CVTask : public XTask
+class AVTask : public XTask
 {
     DECLARE_CREATE_DEFAULT(XTask)
 public:
-    CVTask();
-    CVTask(const std::string_view& name, const TaskFunc& func, const std::string_view& desc);
-    ~CVTask() override;
+    AVTask();
+    AVTask(const std::string& name, const TaskFunc& func, const std::string& desc);
+    ~AVTask() override;
 
 public:
     bool execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const override;

@@ -7,6 +7,7 @@ set(DPS_LIBRARYS
    ${FFT_MOUDLES}
    replxx::replxx
    indicators::indicators
+   nlohmann_json::nlohmann_json
 )
 
 cpp_execute(${PROJECT_NAME})

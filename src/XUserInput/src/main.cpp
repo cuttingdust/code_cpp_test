@@ -405,7 +405,7 @@ public:
         }
     }
 
-    void stop()
+    auto stop() -> void
     {
         is_running_ = false;
     }

@@ -3,20 +3,21 @@
 #include "ITask.h"
 #include "Parameter.h"
 #include "ParameterValue.h"
+#include "TaskProgressBar.h"
 
-#include <functional>
-#include <map>
-#include <optional>
+class TaskProgressBar;
 
 /// 任务定义类
 class XTask : public ITask
 {
     DECLARE_CREATE_DEFAULT(XTask)
 public:
+    using List             = std::map<std::string, XTask::Ptr, std::less<>>;
+    using Container        = std::vector<XTask::Ptr>;
     using TaskFunc         = std::function<void(const std::map<std::string, ParameterValue>&)>;
     using ProgressCallback = std::function<void(float percent, const std::string& timeInfo)>;
     explicit XTask();
-    explicit XTask(const std::string_view& name, TaskFunc func, const std::string_view& desc = "");
+    explicit XTask(const std::string_view& name, const TaskFunc& func, const std::string_view& desc = "");
     ~XTask() override;
 
     XTask(XTask&&) noexcept;
@@ -69,16 +70,23 @@ public:
 
     auto getParameter(const std::string& key, std::string& errorMsg) const -> ParameterValue;
 
-    auto getFFmpegPath() const -> std::string;
+    auto setTaskProgressBar(const TaskProgressBar::Ptr& bar) -> void;
+
+    auto getTaskProgressBar() const -> TaskProgressBar::Ptr;
 
     void setProgressCallback(ProgressCallback callback) const;
 
     auto getProgressCallback() const -> ProgressCallback;
 
 public:
+    auto setTitle(const std::string_view& name) -> void;
+
     auto setName(const std::string_view& name) const -> void;
 
     auto setDescription(const std::string_view& desc) const -> void;
+
+    auto updateProgress(XExec& exec, const std::string_view& taskName,
+                        const std::map<std::string, std::string>& inputParams) -> void;
 
 private:
     class PImpl;

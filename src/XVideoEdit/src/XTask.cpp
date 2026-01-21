@@ -1,6 +1,7 @@
 ﻿#include "XTask.h"
 
 #include "ITask.h"
+#include "TaskProgressBar.h"
 
 #include <stdexcept>
 #include <utility>
@@ -20,6 +21,7 @@ public:
     std::vector<Parameter>                parameters_;
     std::map<std::string, ParameterValue> parameterList_;
     mutable ProgressCallback              progressCallback_;
+    TaskProgressBar::Ptr                  progressBar_ = nullptr;
 };
 
 XTask::PImpl::PImpl(XTask *owenr, const std::string_view &name, TaskFunc func, const std::string_view &desc) :
@@ -31,7 +33,7 @@ XTask::XTask()
 {
 }
 
-XTask::XTask(const std::string_view &name, TaskFunc func, const std::string_view &desc) :
+XTask::XTask(const std::string_view &name, const TaskFunc &func, const std::string_view &desc) :
     impl_(std::make_unique<XTask::PImpl>(this, name, func, desc))
 {
 }
@@ -208,13 +210,14 @@ auto XTask::getParameter(const std::string &key, std::string &errorMsg) const ->
     return it->second;
 }
 
-auto XTask::getFFmpegPath() const -> std::string
+auto XTask::setTaskProgressBar(const TaskProgressBar::Ptr &bar) -> void
 {
-#ifdef FFMPEG_PATH
-    return FFMPEG_PATH;
-#else
-    return "ffmpeg";
-#endif
+    impl_->progressBar_ = bar;
+}
+
+auto XTask::getTaskProgressBar() const -> TaskProgressBar::Ptr
+{
+    return impl_->progressBar_;
 }
 
 void XTask::setProgressCallback(ProgressCallback callback) const
@@ -227,6 +230,14 @@ auto XTask::getProgressCallback() const -> ProgressCallback
     return impl_->progressCallback_;
 }
 
+auto XTask::setTitle(const std::string_view &name) -> void
+{
+    if (impl_->progressBar_)
+    {
+        impl_->progressBar_->setTitle(name);
+    }
+}
+
 auto XTask::setName(const std::string_view &name) const -> void
 {
     impl_->name_ = name;
@@ -235,6 +246,15 @@ auto XTask::setName(const std::string_view &name) const -> void
 auto XTask::setDescription(const std::string_view &desc) const -> void
 {
     impl_->description_ = desc;
+}
+
+auto XTask::updateProgress(XExec &exec, const std::string_view &taskName,
+                           const std::map<std::string, std::string> &inputParams) -> void
+{
+    if (impl_->progressBar_)
+    {
+        impl_->progressBar_->updateProgress(exec, taskName, inputParams);
+    }
 }
 
 

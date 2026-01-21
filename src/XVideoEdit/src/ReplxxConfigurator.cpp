@@ -1,27 +1,27 @@
-﻿// ReplxxConfigurator.cpp
-#include "ReplxxConfigurator.h"
+﻿#include "ReplxxConfigurator.h"
 
-void ReplxxConfigurator::configure(std::unique_ptr<replxx::Replxx>& rx, const CompletionCallback& completionCallback,
-                                   const HintCallback& hintCallback)
+auto ReplxxConfigurator::configure(const std::unique_ptr<replxx::Replxx>& rx,
+                                   const CompletionCallback& completionCallback, const HintCallback& hintCallback)
+        -> void
 {
     if (!rx)
         return;
 
-    // 基础配置
+    /// 基础配置
     setBasicConfig(*rx);
 
-    // 设置回调
+    /// 设置回调
     rx->set_completion_callback([completionCallback](const std::string& input, int& contextLen)
                                 { return completionCallback(input, contextLen); });
 
     rx->set_hint_callback([hintCallback](const std::string& input, int& contextLen, replxx::Replxx::Color& color)
                           { return hintCallback(input, contextLen, color); });
 
-    // 绑定快捷键
+    /// 绑定快捷键
     bindKeys(*rx);
 }
 
-void ReplxxConfigurator::setBasicConfig(replxx::Replxx& rx)
+auto ReplxxConfigurator::setBasicConfig(replxx::Replxx& rx) -> void
 {
     rx.set_max_history_size(128);
     rx.set_max_hint_rows(3);
@@ -37,7 +37,7 @@ void ReplxxConfigurator::setBasicConfig(replxx::Replxx& rx)
     rx.set_indent_multiline(false);
 }
 
-void ReplxxConfigurator::setWordBreakCharacters(replxx::Replxx& rx)
+auto ReplxxConfigurator::setWordBreakCharacters(replxx::Replxx& rx) -> void
 {
 #ifdef _WIN32
     rx.set_word_break_characters(" \t\n-%!;:=*~^<>?|&()");

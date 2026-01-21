@@ -16,7 +16,7 @@ public:
     Type           type_;
     std::string    description_;
     bool           required_;
-    CompletionFunc completor_; // 补全函数
+    CompletionFunc completor_; /// 补全函数
 };
 
 Parameter::PImpl::PImpl(Parameter *owner) : owner_(owner)
@@ -135,10 +135,10 @@ std::vector<std::string> Parameter::getCompletions(std::string_view partial) con
 {
     if (impl_->completor_)
     {
-        // 使用自定义补全函数
+        /// 使用自定义补全函数
         return impl_->completor_(partial);
     }
-    // 使用默认补全逻辑
+    /// 使用默认补全逻辑
     return getDefaultCompletions(impl_->type_, impl_->name_, partial);
 }
 

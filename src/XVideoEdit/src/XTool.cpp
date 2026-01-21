@@ -14,14 +14,14 @@ auto XTool::isInteractiveTerminal() -> bool
 #endif
 }
 
-auto XTool::split(const std::string &input, char delimiter, bool trimWhitespace) -> std::vector<std::string>
+auto XTool::split(const std::string_view &input, char delimiter, bool trimWhitespace) -> std::vector<std::string>
 {
     std::vector<std::string> ret;
     if (input.empty())
         return ret;
 
     std::string        tmp;
-    std::istringstream iss(input);
+    std::istringstream iss((input.data()));
 
     while (std::getline(iss, tmp, delimiter))
     {
@@ -91,4 +91,13 @@ auto XTool::smartSplit(const std::string &input) -> std::vector<std::string>
     }
 
     return tokens;
+}
+
+auto XTool::getFFmpegPath() -> std::string
+{
+#ifdef FFMPEG_PATH
+    return FFMPEG_PATH;
+#else
+    return "ffmpeg";
+#endif
 }

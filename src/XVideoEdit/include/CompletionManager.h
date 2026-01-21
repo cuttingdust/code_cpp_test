@@ -1,15 +1,7 @@
-﻿// CompletionManager.h
-#pragma once
+﻿#pragma once
 
 #include "XTask.h"
-#include "XFile.h"
-#include "XTool.h"
 #include <replxx.hxx>
-#include <filesystem>
-#include <map>
-#include <memory>
-
-namespace fs = std::filesystem;
 
 class CompletionManager
 {
@@ -20,45 +12,27 @@ public:
         std::string pathPart;
         bool        isPathCompletion = false;
     };
+    CompletionManager();
+    CompletionManager(XTask::List& tasks);
+    ~CompletionManager();
+    using Completions = replxx::Replxx::completions_t;
+    using Hints       = replxx::Replxx::hints_t;
+    using Color       = replxx::Replxx::Color;
 
-    CompletionManager(std::map<std::string, std::shared_ptr<XTask>, std::less<>>& tasks);
+public:
+    auto registerBuiltinCommand(const std::string_view& command) -> void;
 
-    replxx::Replxx::completions_t completionHook(const std::string& input, int& contextLen);
-    replxx::Replxx::hints_t       hintHook(const std::string& input, int& contextLen, replxx::Replxx::Color& color);
+    auto getBuiltinCommands() const -> const std::vector<std::string>&;
 
-private:
-    // 补全分析
-    CompletionContext analyzeInput(std::string_view input) const;
-    bool              shouldCompletePath(const std::string& lastPart) const;
+    auto completionHook(const std::string_view& input, int& contextLen) -> Completions;
 
-    // 不同类型的补全处理
-    void handleTaskCompletion(const std::string& input, const CompletionContext& ctx,
-                              replxx::Replxx::completions_t& completions, int& contextLen);
-    void handleCommandCompletion(const std::string& input, const CompletionContext& ctx,
-                                 replxx::Replxx::completions_t& completions);
-    void handlePathCompletion(const CompletionContext& ctx, replxx::Replxx::completions_t& completions,
-                              int& contextLen);
+    auto hintHook(const std::string_view& input, int& contextLen, Color& color) -> Hints;
 
-    // Task命令补全的辅助方法
-    void handleEmptyTaskInput(replxx::Replxx::completions_t& completions);
-    void handleTaskNameCompletion(const std::vector<std::string>& tokens, replxx::Replxx::completions_t& completions);
+    auto setTaskList(const XTask::List& tasks) -> void;
 
-    // 修改：添加 originalInput 参数
-    void handleTaskParamCompletion(const std::vector<std::string>& tokens, std::shared_ptr<XTask> task,
-                                   const std::string& originalInput, replxx::Replxx::completions_t& completions,
-                                   int& contextLen);
-
-    // 路径补全
-    void completePathSmart(std::string_view partialPath, replxx::Replxx::completions_t& completions, int& contextLen);
-    void collectCompletions(const fs::path& basePath, const std::string& matchPrefix,
-                            replxx::Replxx::completions_t& completions);
-    void addCompletion(const fs::directory_entry& entry, const std::string& name,
-                       replxx::Replxx::completions_t& completions);
-    void sortCompletions(replxx::Replxx::completions_t& completions);
-
-    // 提示信息
-    std::string extractPathPartForHint(const std::string& input) const;
+    auto registerTaskCommand(const std::string_view& command, const XTask::Ptr& task) -> void;
 
 private:
-    std::map<std::string, std::shared_ptr<XTask>, std::less<>>& tasks_;
+    class PImpl;
+    std::unique_ptr<PImpl> impl_;
 };

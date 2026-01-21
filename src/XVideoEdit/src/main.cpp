@@ -1,13 +1,16 @@
 #include "XUserInput.h"
-
 #include <iostream>
-#include <Windows.h>
 
 int main(int argc, char* argv[])
 {
     setlocale(LC_ALL, "zh_CN.UTF-8");
 
     XUserInput user_input;
+
+    /// 设置事件回调
+    user_input.setOnCommandStart([](const std::string& cmd) { std::cout << "开始执行命令: " << cmd << "\n"; });
+    user_input.setOnCommandComplete([](const std::string& cmd) { std::cout << "命令执行完成\n"; });
+    user_input.setOnError([](const std::string& error) { std::cerr << "执行出错: " << error << "\n"; });
 
     /// 示例1：支持类型的copy任务
     user_input
@@ -232,7 +235,7 @@ int main(int argc, char* argv[])
     /// 示例5：视频转码任务
     user_input
             .registerTask(
-                    "cv",
+                    "cv", "AV",
                     [](const std::map<std::string, XUserInput::ParameterValue>& params)
                     {
                         std::cout << "[转码操作]" << std::endl;
@@ -284,17 +287,22 @@ int main(int argc, char* argv[])
                               return suggestions;
                           });
 
-    std::cout << "=== 增强型任务处理器示例 ===" << std::endl;
-    std::cout << "支持参数类型: 字符串、整数、浮点数、布尔值" << std::endl;
-    std::cout << "智能补全功能已启用！" << std::endl;
-    std::cout << "可以尝试以下命令:" << std::endl;
-    std::cout << "  1. task copy -s [Tab] 然后输入 -d [Tab]" << std::endl;
-    std::cout << "  2. task calculate -x [Tab] 选择数值" << std::endl;
-    std::cout << "  3. task start -host [Tab] 选择主机" << std::endl;
-    std::cout << "  4. task start -port [Tab] 选择端口" << std::endl;
-    std::cout << "  5. task echo -m [Tab] 选择消息" << std::endl;
-    std::cout << "  6. task cv --input [Tab] (支持路径补全)" << std::endl;
-    std::cout << "  7. help (查看帮助) 或 list (列出任务)\n" << std::endl;
+    /// 注册自定义命令
+    user_input.registerCommandHandler("hello",
+                                      [](const CommandParser::ParsedCommand& cmd)
+                                      {
+                                          std::string name = cmd.args.empty() ? "World" : cmd.args[0];
+                                          std::cout << "Hello, " << name << "!\n";
+                                      });
+
+    user_input.registerCommandHandler("stats",
+                                      [&user_input](const CommandParser::ParsedCommand&)
+                                      {
+                                          std::cout << "=== 统计信息 ===\n";
+                                          std::cout << "任务数量: " << user_input.getTaskCount() << "\n";
+                                          std::cout << "命令数量: " << user_input.getCommandCount() << "\n";
+                                          std::cout << "系统状态: " << user_input.getStateString() << "\n";
+                                      });
 
     user_input.start();
 
