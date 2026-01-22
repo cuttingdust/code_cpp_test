@@ -11,6 +11,11 @@ public:
     ~PImpl() = default;
 
 public:
+    /// 根据参数类型自动生成补全建议
+    static auto getDefaultCompletions(const Type &type, const std::string_view &name, std::string_view partial)
+            -> std::vector<std::string>;
+
+public:
     Parameter     *owner_ = nullptr;
     std::string    name_;
     Type           type_;
@@ -29,120 +34,8 @@ Parameter::PImpl::PImpl(Parameter *owner, const std::string_view &name, Type typ
 {
 }
 
-Parameter::Parameter(const std::string_view &name, Type type, const std::string_view &desc, bool required) :
-    impl_(std::make_unique<PImpl>(this, name, type, desc, required))
-{
-}
-
-Parameter::~Parameter() = default;
-
-Parameter::Parameter(Parameter &&) noexcept                     = default;
-auto Parameter::operator=(Parameter &&) noexcept -> Parameter & = default;
-
-/// 拷贝构造函数实现
-Parameter::Parameter(const Parameter &other) : impl_(other.impl_ ? std::make_unique<PImpl>(*other.impl_) : nullptr)
-{
-    /// 更新owner_指针指向当前对象
-    if (impl_)
-    {
-        impl_->owner_ = this;
-        // 需要单独拷贝补全函数，因为它是可调用对象
-        if (other.impl_)
-        {
-            impl_->completor_ = other.impl_->completor_;
-        }
-    }
-}
-
-/// 拷贝赋值运算符
-auto Parameter::operator=(const Parameter &other) -> Parameter &
-{
-    if (this != &other)
-    {
-        if (other.impl_)
-        {
-            impl_         = std::make_unique<PImpl>(*other.impl_);
-            impl_->owner_ = this; /// 更新owner_指针
-            // 拷贝补全函数
-            impl_->completor_ = other.impl_->completor_;
-        }
-        else
-        {
-            impl_.reset();
-        }
-    }
-    return *this;
-}
-
-auto Parameter::operator==(const Parameter &other) const -> bool
-{
-    return getName() == other.getName();
-}
-
-auto Parameter::operator==(const std::string_view &name) const -> bool
-{
-    return getName() == name;
-}
-
-auto Parameter::getName() const -> const std::string &
-{
-    return impl_->name_;
-}
-
-auto Parameter::getType() const -> Type
-{
-    return impl_->type_;
-}
-
-auto Parameter::getDescription() const -> const std::string &
-{
-    return impl_->description_;
-}
-
-auto Parameter::isRequired() const -> bool
-{
-    return impl_->required_;
-}
-
-auto Parameter::getTypeName() const -> std::string
-{
-    switch (impl_->type_)
-    {
-        case Type::String:
-            return "字符串";
-        case Type::Int:
-            return "整数";
-        case Type::Double:
-            return "浮点数";
-        case Type::Bool:
-            return "布尔值";
-        case Type::File:
-            return "文件路径";
-        case Type::Directory:
-            return "目录路径";
-        default:
-            return "未知";
-    }
-}
-
-Parameter &Parameter::setCompletions(CompletionFunc completor)
-{
-    impl_->completor_ = std::move(completor);
-    return *this;
-}
-
-std::vector<std::string> Parameter::getCompletions(std::string_view partial) const
-{
-    if (impl_->completor_)
-    {
-        /// 使用自定义补全函数
-        return impl_->completor_(partial);
-    }
-    /// 使用默认补全逻辑
-    return getDefaultCompletions(impl_->type_, impl_->name_, partial);
-}
-
-std::vector<std::string> Parameter::getDefaultCompletions(Type type, const std::string &name, std::string_view partial)
+auto Parameter::PImpl::getDefaultCompletions(const Type &type, const std::string_view &name, std::string_view partial)
+        -> std::vector<std::string>
 {
     std::vector<std::string> completions;
 
@@ -158,7 +51,7 @@ std::vector<std::string> Parameter::getDefaultCompletions(Type type, const std::
     {
         case Type::File:
             {
-                // 文件类型：提供一些常见的文件扩展名
+                /// 文件类型：提供一些常见的文件扩展名
                 if (partial.empty() || partial.find('.') != std::string::npos)
                 {
                     static const std::vector<std::string> commonFiles = { ".txt", ".mp4", ".avi", ".mov",  ".jpg",
@@ -170,13 +63,13 @@ std::vector<std::string> Parameter::getDefaultCompletions(Type type, const std::
                         addIfMatches(file);
                     }
                 }
-                // 如果输入看起来像路径，让路径补全系统处理
+                /// 如果输入看起来像路径，让路径补全系统处理
                 break;
             }
 
         case Type::Directory:
             {
-                // 目录类型：提供一些常见的目录名
+                /// 目录类型：提供一些常见的目录名
                 if (partial.empty())
                 {
                     static const std::vector<std::string> commonDirs = { "./", "../", "~/", "C:/", "D:/", "E:/" };
@@ -185,7 +78,7 @@ std::vector<std::string> Parameter::getDefaultCompletions(Type type, const std::
                         completions.push_back(dir);
                     }
                 }
-                // 如果输入看起来像路径，让路径补全系统处理
+                /// 如果输入看起来像路径，让路径补全系统处理
                 break;
             }
 
@@ -308,9 +201,122 @@ std::vector<std::string> Parameter::getDefaultCompletions(Type type, const std::
             break;
 
         default:
-            // 对于其他类型，返回空列表
+            /// 对于其他类型，返回空列表
             break;
     }
 
     return completions;
+}
+
+Parameter::Parameter(const std::string_view &name, Type type, const std::string_view &desc, bool required) :
+    impl_(std::make_unique<PImpl>(this, name, type, desc, required))
+{
+}
+
+Parameter::~Parameter() = default;
+
+Parameter::Parameter(Parameter &&) noexcept                     = default;
+auto Parameter::operator=(Parameter &&) noexcept -> Parameter & = default;
+
+/// 拷贝构造函数实现
+Parameter::Parameter(const Parameter &other) : impl_(other.impl_ ? std::make_unique<PImpl>(*other.impl_) : nullptr)
+{
+    /// 更新owner_指针指向当前对象
+    if (impl_)
+    {
+        impl_->owner_ = this;
+        // 需要单独拷贝补全函数，因为它是可调用对象
+        if (other.impl_)
+        {
+            impl_->completor_ = other.impl_->completor_;
+        }
+    }
+}
+
+/// 拷贝赋值运算符
+auto Parameter::operator=(const Parameter &other) -> Parameter &
+{
+    if (this != &other)
+    {
+        if (other.impl_)
+        {
+            impl_         = std::make_unique<PImpl>(*other.impl_);
+            impl_->owner_ = this; /// 更新owner_指针
+            // 拷贝补全函数
+            impl_->completor_ = other.impl_->completor_;
+        }
+        else
+        {
+            impl_.reset();
+        }
+    }
+    return *this;
+}
+
+auto Parameter::operator==(const Parameter &other) const -> bool
+{
+    return getName() == other.getName();
+}
+
+auto Parameter::operator==(const std::string_view &name) const -> bool
+{
+    return getName() == name;
+}
+
+auto Parameter::getName() const -> const std::string &
+{
+    return impl_->name_;
+}
+
+auto Parameter::getType() const -> Type
+{
+    return impl_->type_;
+}
+
+auto Parameter::getDescription() const -> const std::string &
+{
+    return impl_->description_;
+}
+
+auto Parameter::isRequired() const -> bool
+{
+    return impl_->required_;
+}
+
+auto Parameter::getTypeName() const -> std::string
+{
+    switch (impl_->type_)
+    {
+        case Type::String:
+            return "字符串";
+        case Type::Int:
+            return "整数";
+        case Type::Double:
+            return "浮点数";
+        case Type::Bool:
+            return "布尔值";
+        case Type::File:
+            return "文件路径";
+        case Type::Directory:
+            return "目录路径";
+        default:
+            return "未知";
+    }
+}
+
+auto Parameter::setCompletions(const CompletionFunc &completor) -> Parameter &
+{
+    impl_->completor_ = completor;
+    return *this;
+}
+
+auto Parameter::getCompletions(const std::string_view &partial) const -> std::vector<std::string>
+{
+    if (impl_->completor_)
+    {
+        /// 使用自定义补全函数
+        return impl_->completor_(partial);
+    }
+    /// 使用默认补全逻辑
+    return PImpl::getDefaultCompletions(impl_->type_, impl_->name_, partial);
 }

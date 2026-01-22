@@ -612,7 +612,7 @@ CompletionManager::CompletionManager() : impl_(std::make_unique<CompletionManage
 {
 }
 
-CompletionManager::CompletionManager(XTask::List& tasks) :
+CompletionManager::CompletionManager(const XTask::List& tasks) :
     impl_(std::make_unique<CompletionManager::PImpl>(this, tasks))
 {
 }

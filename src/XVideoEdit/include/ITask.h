@@ -7,8 +7,8 @@ class ITask
 public:
     enum class TaskType
     {
-        TT_NORMAL,
-        TT_VIDEO
+        TT_DEFAULT,
+        TT_AV
     };
 
     virtual ~ITask() = default;
@@ -27,5 +27,5 @@ public:
     }
 
 protected:
-    TaskType tt_ = TaskType::TT_NORMAL;
+    TaskType tt_ = TaskType::TT_DEFAULT;
 };

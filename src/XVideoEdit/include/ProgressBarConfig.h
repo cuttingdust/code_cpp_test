@@ -26,7 +26,7 @@
 enum class ProgressBarStyle
 {
     Default,
-    CVTask,       ///< 视频转码任务
+    AVTask,       ///< 视频转码任务
     AnalysisTask, ///< 分析任务
     DownloadTask, ///< 下载任务
     Custom        ///< 自定义

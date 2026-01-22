@@ -45,16 +45,6 @@ public:
     /// \param handler 命令处理函数
     auto registerCommandHandler(const std::string_view& command, ParsedCallback handler) -> void;
 
-public:
-    /// \brief 启动用户输入处理器
-    ///
-    /// \如果终端支持交互式输入，则启动REPL界面
-    /// \否则退回到简单输入模式
-    auto start() -> void;
-
-    /// \brief
-    auto stop() -> void;
-
     /// \brief 注册任务
     /// \param name 任务名称
     /// \param func 任务执行函数
@@ -66,21 +56,42 @@ public:
     auto registerTask(const std::string_view& name, const std::string& typeName, const TaskFunc& func,
                       const std::string_view& description = "") -> XTask&;
 
+public:
+    /// \brief 启动用户输入处理器
+    ///
+    /// \如果终端支持交互式输入，则启动REPL界面
+    /// \否则退回到简单输入模式
+    auto start() -> void;
+
+    /// \brief
+    auto stop() -> void;
 
     /// \brief 获取任务管理器引用
     /// \return TaskManager& 任务管理器
-    TaskManager& getTaskManager();
-
+    auto getTaskManager() -> TaskManager&;
 
     /// \brief 获取补全管理器引用
     /// \return CompletionManager& 补全管理器
-    CompletionManager& getCompletionManager();
+    auto getCompletionManager() -> CompletionManager&;
+
+    /// \brief 系统状态机
+    /// \return
+    auto getState() const -> InputStateMachine::State;
+
+    /// \brief 任务数量
+    /// \return
+    auto getTaskCount() const -> size_t;
+
+    /// \brief 内置命令数量
+    /// \return
+    auto getCommandCount() const -> size_t;
 
     /// 状态查询
-    bool                     isRunning() const;
-    InputStateMachine::State getState() const;
-    std::string              getStateString() const;
+    auto isRunning() const -> bool;
 
+    auto getStateString() const -> std::string;
+
+public:
     /// 配置管理
     void            setConfig(const UIConfig& config);
     const UIConfig& getConfig() const;
@@ -88,10 +99,6 @@ public:
     /// 历史记录管理
     void                     clearHistory();
     std::vector<std::string> getHistory() const;
-
-    /// 统计信息
-    size_t getTaskCount() const;
-    size_t getCommandCount() const;
 
 public:
     /// 事件回调

@@ -19,6 +19,33 @@ public:
 
     auto handleBuiltinCommand(const ParsedCommand& cmd) -> void;
 
+    auto registerTask(const std::string_view& name, const XTask::TaskFunc& func, const std::string_view& description)
+            -> XTask&;
+
+    auto registerTask(const std::string_view& taskName, const std::string_view& typeName, const XTask::TaskFunc& func,
+                      const std::string_view& description) -> XTask&;
+
+public:
+    /// 辅助方法
+    auto showWelcomeMessage() const -> void;
+    auto showGoodbyeMessage() const -> void;
+    void showStatus() const;
+    void showHelp() const;
+
+public:
+    auto shouldUseREPL() const -> bool;
+    auto getStateString() const -> std::string;
+    auto getTaskCount() const -> size_t;
+    auto getCommandCount() const -> size_t;
+    auto isRunning() const -> bool;
+
+public:
+    auto getTaskManager() -> TaskManager&;
+
+    auto getState() const -> InputStateMachine::State;
+
+    auto getCompletionManager() -> CompletionManager&;
+
 public:
     std::map<std::string, ParsedCallback> commandHandlers_; ///< 自定义命令处理器
 
@@ -28,7 +55,7 @@ public:
     CommandCallback onError_;
 
     /// 统计
-    size_t commandCount_ = 0;
+    size_t commandCount_ = 0; /// 内部命令数量
 
 public:
     /// 公共接口实现
@@ -36,28 +63,13 @@ public:
 
     auto stop() -> void;
 
-    auto registerTask(const std::string_view& name, const XTask::TaskFunc& func, const std::string_view& description)
-            -> XTask&;
-
-    auto registerTask(const std::string_view& taskName, const std::string_view& typeName, const XTask::TaskFunc& func,
-                      const std::string_view& description) -> XTask&;
 
 public:
-    TaskManager&       getTaskManager();
-    CompletionManager& getCompletionManager();
-
-    bool                     isRunning() const;
-    InputStateMachine::State getState() const;
-    std::string              getStateString() const;
-
     void            setConfig(const UIConfig& config);
     const UIConfig& getConfig() const;
 
     void                     clearHistory();
     std::vector<std::string> getHistory() const;
-
-    size_t getTaskCount() const;
-    size_t getCommandCount() const;
 
     auto setOnCommandStart(CommandCallback callback) -> void;
     auto setOnCommandComplete(CommandCallback callback) -> void;
@@ -80,16 +92,10 @@ public:
     void handleCommand(const std::string& input);
     void handleTaskCommand(const CommandParser::ParsedCommand& cmd);
 
-public:
-    /// 辅助方法
-    auto showWelcomeMessage() const -> void;
-    auto showGoodbyeMessage() const -> void;
-    void showStatus() const;
-    void showHelp() const;
 
 public:
     std::string getPrompt() const;
-    auto        shouldUseREPL() const -> bool;
+
 
     // 错误处理
     void handleError(const std::exception& e);
@@ -139,7 +145,7 @@ XUserInput::PImpl::~PImpl()
     }
     catch (...)
     {
-        // 析构函数中不抛出异常
+        /// 析构函数中不抛出异常
     }
 }
 
@@ -155,7 +161,7 @@ auto XUserInput::PImpl::initialize() -> void
     historyManager_ = std::make_unique<HistoryManager>(rx_, config_);
 
     /// 初始化补全管理器
-    completionManager_ = std::make_unique<CompletionManager>(taskManager_->getTasks());
+    completionManager_ = std::make_unique<CompletionManager>();
 
     /// 注册内置命令（这会同时注册到补全管理器）
     registerBuiltinCommands();
@@ -193,7 +199,7 @@ auto XUserInput::PImpl::registerBuiltinCommands() -> void
 
     /// stats 命令
     registerCommandHandler("stats",
-                           [this](const CommandParser::ParsedCommand&)
+                           [this](const ParsedCommand&)
                            {
                                auto stats = taskManager_->getStatistics();
                                std::cout << "\n=== 任务统计信息 ===\n"
@@ -265,7 +271,7 @@ auto XUserInput::PImpl::initializeREPL() -> void
             [this](const std::string& input, int& contextLen, replxx::Replxx::Color& color)
             { return completionManager_->hintHook(input, contextLen, color); });
 
-    completionManager_->setTaskList(taskManager_->getTasks());
+    completionManager_->setTaskList(taskManager_->getTaskInstances());
 }
 
 void XUserInput::PImpl::initializeSimpleMode()
@@ -475,28 +481,28 @@ auto XUserInput::PImpl::registerCommandHandler(const std::string_view& command, 
     completionManager_->registerBuiltinCommand(command);
 }
 
-TaskManager& XUserInput::PImpl::getTaskManager()
+auto XUserInput::PImpl::getTaskManager() -> TaskManager&
 {
     return *taskManager_;
 }
 
 
-CompletionManager& XUserInput::PImpl::getCompletionManager()
+auto XUserInput::PImpl::getCompletionManager() -> CompletionManager&
 {
     return *completionManager_;
 }
 
-bool XUserInput::PImpl::isRunning() const
+auto XUserInput::PImpl::isRunning() const -> bool
 {
     return stateMachine_->isRunning();
 }
 
-InputStateMachine::State XUserInput::PImpl::getState() const
+auto XUserInput::PImpl::getState() const -> InputStateMachine::State
 {
     return stateMachine_->getCurrentState();
 }
 
-std::string XUserInput::PImpl::getStateString() const
+auto XUserInput::PImpl::getStateString() const -> std::string
 {
     return InputStateMachine::stateToString(getState());
 }
@@ -521,12 +527,12 @@ std::vector<std::string> XUserInput::PImpl::getHistory() const
     return historyManager_->getHistory();
 }
 
-size_t XUserInput::PImpl::getTaskCount() const
+auto XUserInput::PImpl::getTaskCount() const -> size_t
 {
     return taskManager_->getTaskInstanceCount();
 }
 
-size_t XUserInput::PImpl::getCommandCount() const
+auto XUserInput::PImpl::getCommandCount() const -> size_t
 {
     return commandCount_;
 }
@@ -570,7 +576,7 @@ auto XUserInput::PImpl::showGoodbyeMessage() const -> void
               << "\n\x1b[1;33m再见！\x1b[0m\n";
 }
 
-void XUserInput::PImpl::showStatus() const
+auto XUserInput::PImpl::showStatus() const -> void
 {
     std::cout << "\n=== 系统状态 ===\n"
               << "状态: " << getStateString() << "\n"
@@ -718,28 +724,28 @@ auto XUserInput::registerCommandHandler(const std::string_view& command, ParsedC
 }
 
 
-TaskManager& XUserInput::getTaskManager()
+auto XUserInput::getTaskManager() -> TaskManager&
 {
     return impl_->getTaskManager();
 }
 
 
-CompletionManager& XUserInput::getCompletionManager()
+auto XUserInput::getCompletionManager() -> CompletionManager&
 {
     return impl_->getCompletionManager();
 }
 
-bool XUserInput::isRunning() const
+auto XUserInput::isRunning() const -> bool
 {
     return impl_->isRunning();
 }
 
-InputStateMachine::State XUserInput::getState() const
+auto XUserInput::getState() const -> InputStateMachine::State
 {
     return impl_->getState();
 }
 
-std::string XUserInput::getStateString() const
+auto XUserInput::getStateString() const -> std::string
 {
     return impl_->getStateString();
 }
@@ -764,12 +770,12 @@ std::vector<std::string> XUserInput::getHistory() const
     return impl_->getHistory();
 }
 
-size_t XUserInput::getTaskCount() const
+auto XUserInput::getTaskCount() const -> size_t
 {
     return impl_->getTaskCount();
 }
 
-size_t XUserInput::getCommandCount() const
+auto XUserInput::getCommandCount() const -> size_t
 {
     return impl_->getCommandCount();
 }

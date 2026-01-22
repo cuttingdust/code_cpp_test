@@ -30,6 +30,8 @@ public:
 
     auto asBool() const -> bool;
 
+    auto asPath() const -> fs::path;
+
     /// 隐式转换到string
     operator std::string() const;
 

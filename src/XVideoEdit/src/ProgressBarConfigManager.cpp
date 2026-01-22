@@ -16,16 +16,18 @@ auto ProgressBarConfigManager::initPresets() -> void
 {
     /// 默认配置
     defaultConfig_ = ProgressBarConfig::create();
+    registerPreset("default", defaultConfig_);
+    registerPreset(ProgressBarStyle::AVTask, defaultConfig_);
 
-    // /// CV任务配置 (视频转码)
-    auto cvConfig             = ProgressBarConfig::create();
+    /// AV任务配置
+    auto cvConfig             = defaultConfig_->clone();
     cvConfig->barWidth        = 60;
     cvConfig->foregroundColor = BarColor::Cyan;
     cvConfig->backgroundColor = BarColor::Grey;
-    cvConfig->style           = ProgressBarStyle::CVTask;
-    cvConfig->themeName       = "cv";
-    registerPreset("cv", cvConfig);
-    registerPreset(ProgressBarStyle::CVTask, cvConfig);
+    cvConfig->style           = ProgressBarStyle::AVTask;
+    cvConfig->themeName       = "av";
+    registerPreset("av", cvConfig);
+    registerPreset(ProgressBarStyle::AVTask, cvConfig);
 
     // /// 分析任务配置
     // auto analysisConfig             = std::make_shared<ProgressBarConfig>();
@@ -53,7 +55,7 @@ auto ProgressBarConfigManager::initPresets() -> void
     // registerPreset(ProgressBarStyle::DownloadTask, downloadConfig);
 
     /// 错误/警告配置
-    auto errorConfig             = std::make_shared<ProgressBarConfig>();
+    auto errorConfig             = defaultConfig_->clone();
     errorConfig->barWidth        = 50;
     errorConfig->foregroundColor = BarColor::Red;
     errorConfig->backgroundColor = BarColor::Grey;

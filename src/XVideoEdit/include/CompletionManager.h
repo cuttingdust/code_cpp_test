@@ -13,7 +13,7 @@ public:
         bool        isPathCompletion = false;
     };
     CompletionManager();
-    CompletionManager(XTask::List& tasks);
+    CompletionManager(const XTask::List& tasks);
     ~CompletionManager();
     using Completions = replxx::Replxx::completions_t;
     using Hints       = replxx::Replxx::hints_t;

@@ -2,10 +2,6 @@
 
 #include "XConst.h"
 
-#include <functional>
-#include <vector>
-#include <optional>
-
 /// 参数定义类
 class Parameter
 {
@@ -21,7 +17,7 @@ public:
     };
     using Container      = std::vector<Parameter>;
     using Optional       = std::optional<Parameter>;
-    using CompletionFunc = std::function<std::vector<std::string>(std::string_view partial)>;
+    using CompletionFunc = std::function<std::vector<std::string>(const std::string_view& partial)>;
 
     Parameter(const std::string_view& name, Type type = Type::String, const std::string_view& desc = "",
               bool required = false);
@@ -49,13 +45,10 @@ public:
     auto getTypeName() const -> std::string;
 
     /// 设置补全函数
-    Parameter& setCompletions(CompletionFunc completor);
+    auto setCompletions(const CompletionFunc& completor) -> Parameter&;
 
     /// 获取补全建议
-    std::vector<std::string> getCompletions(std::string_view partial) const;
-
-    /// 根据参数类型自动生成补全建议
-    static std::vector<std::string> getDefaultCompletions(Type type, const std::string& name, std::string_view partial);
+    auto getCompletions(const std::string_view& partial) const -> std::vector<std::string>;
 
 private:
     class PImpl;

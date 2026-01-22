@@ -31,6 +31,7 @@ public:
 
 AVTask::PImpl::PImpl(AVTask* owner) : owner_(owner)
 {
+    owner_->setTaskType(TaskType::TT_AV);
 }
 
 auto AVTask::PImpl::isVideoFile(const std::string& filePath, std::string& errorMsg) const -> bool
@@ -64,7 +65,7 @@ auto AVTask::PImpl::validatePaths(const std::string& srcPath, const std::string&
             return false;
         }
 
-        constexpr uintmax_t MAX_FILE_SIZE = 10ULL * 1024 * 1024 * 1024; // 10GB
+        constexpr uintmax_t MAX_FILE_SIZE = 10ULL * 1024 * 1024 * 1024; /// 10GB
         if (fileSize > MAX_FILE_SIZE)
         {
             errorMsg = "源文件过大（超过10GB）";
@@ -219,11 +220,10 @@ auto AVTask::PImpl::executeFFmpegCommand(const std::string&                     
 
 AVTask::AVTask()
 {
-    this->setTaskType(TaskType::TT_VIDEO);
     impl_ = std::make_unique<AVTask::PImpl>(this);
 }
 
-AVTask::AVTask(const std::string& name, const TaskFunc& func, const std::string& desc) :
+AVTask::AVTask(const std::string_view& name, const TaskFunc& func, const std::string_view& desc) :
     XTask(name, func, desc), impl_(std::make_unique<AVTask::PImpl>(this))
 {
 }
@@ -238,36 +238,41 @@ auto AVTask::execute(const std::map<std::string, std::string>& inputParams, std:
         return false;
     }
 
-    /// 2. 获取基本参数
-    std::string ffmpegPath = XTool::getFFmpegPath();
-    std::string srcPath    = getRequiredParam(inputParams, "--input", errorMsg);
-    std::string dstPath    = getRequiredParam(inputParams, "--output", errorMsg);
-
-    if (srcPath.empty() || dstPath.empty())
+    if (getName() == "cv") /// 音频转码
     {
-        return false;
+        /// 2. 获取基本参数
+        std::string ffmpegPath = XTool::getFFmpegPath();
+        std::string srcPath    = getRequiredParam(inputParams, "--input", errorMsg);
+        std::string dstPath    = getRequiredParam(inputParams, "--output", errorMsg);
+
+        if (srcPath.empty() || dstPath.empty())
+        {
+            return false;
+        }
+
+        /// 3. 文件系统检查
+        if (!impl_->validatePaths(srcPath, dstPath, errorMsg))
+        {
+            return false;
+        }
+
+        /// 4. 检查是否为视频文件
+        if (!impl_->isVideoFile(srcPath, errorMsg))
+        {
+            return false;
+        }
+
+        /// 5. 构建FFmpeg命令
+        std::string command = impl_->buildFFmpegCommand(ffmpegPath, srcPath, dstPath, inputParams);
+        std::cout << "执行命令: " << command << std::endl;
+
+        /// 6. 执行命令
+        return impl_->executeFFmpegCommand(command, inputParams, errorMsg);
     }
 
-    /// 3. 文件系统检查
-    if (!impl_->validatePaths(srcPath, dstPath, errorMsg))
-    {
-        return false;
-    }
-
-    /// 4. 检查是否为视频文件
-    if (!impl_->isVideoFile(srcPath, errorMsg))
-    {
-        return false;
-    }
-
-    /// 5. 构建FFmpeg命令
-    std::string command = impl_->buildFFmpegCommand(ffmpegPath, srcPath, dstPath, inputParams);
-    std::cout << "执行命令: " << command << std::endl;
-
-    /// 6. 执行命令
-    return impl_->executeFFmpegCommand(command, inputParams, errorMsg);
+    return true;
 }
 
 
 IMPLEMENT_CREATE_DEFAULT(AVTask)
-template auto AVTask::create(const std::string&, const TaskFunc&, const std::string&) -> AVTask::Ptr;
+template auto AVTask::create(const std::string_view&, const TaskFunc&, const std::string_view&) -> AVTask::Ptr;

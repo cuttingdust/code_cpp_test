@@ -113,6 +113,40 @@ auto ParameterValue::asBool() const -> bool
     return lower == "true" || lower == "1" || lower == "yes" || lower == "on" || lower == "enabled";
 }
 
+auto ParameterValue::asPath() const -> fs::path
+{
+    if (impl_->value_.empty())
+    {
+        throw std::runtime_error("文件路径为空");
+    }
+
+    fs::path filePath(impl_->value_);
+
+    /// 验证路径是否存在且是文件
+    if (!fs::exists(filePath))
+    {
+        throw std::runtime_error("文件不存在: " + impl_->value_);
+    }
+
+    if (!fs::is_regular_file(filePath))
+    {
+        throw std::runtime_error("路径不是普通文件: " + impl_->value_);
+    }
+
+    /// 检查文件是否可访问（可选）
+    try
+    {
+        /// 尝试获取文件状态以验证可访问性
+        fs::status(filePath);
+    }
+    catch (const std::exception &e)
+    {
+        throw std::runtime_error("无法访问文件: " + std::string(e.what()));
+    }
+
+    return filePath;
+}
+
 ParameterValue::operator std::string() const
 {
     return impl_->value_;

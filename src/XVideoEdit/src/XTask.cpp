@@ -43,52 +43,52 @@ XTask::XTask(XTask &&) noexcept            = default;
 XTask &XTask::operator=(XTask &&) noexcept = default;
 
 
-XTask &XTask::addParameter(const std::string &paramName, Parameter::Type type, const std::string &desc, bool required,
-                           Parameter::CompletionFunc completor)
+auto XTask::addParameter(const std::string_view &paramName, Type type, const std::string_view &desc, bool required,
+                         const CompletionFunc &completor) -> XTask &
 {
     auto param = Parameter(paramName, type, desc, required);
     if (completor)
     {
-        param.setCompletions(std::move(completor));
+        param.setCompletions(completor);
     }
     impl_->parameters_.push_back(std::move(param));
     return *this;
 }
 
-XTask &XTask::addStringParam(const std::string &paramName, const std::string &desc, bool required,
-                             Parameter::CompletionFunc completor)
+auto XTask::addStringParam(const std::string_view &paramName, const std::string_view &desc, bool required,
+                           const CompletionFunc &completor) -> XTask &
 {
-    return addParameter(paramName, Parameter::Type::String, desc, required, std::move(completor));
+    return addParameter(paramName, Type::String, desc, required, completor);
 }
 
-XTask &XTask::addIntParam(const std::string &paramName, const std::string &desc, bool required,
-                          Parameter::CompletionFunc completor)
+auto XTask::addIntParam(const std::string_view &paramName, const std::string_view &desc, bool required,
+                        const CompletionFunc &completor) -> XTask &
 {
-    return addParameter(paramName, Parameter::Type::Int, desc, required, std::move(completor));
+    return addParameter(paramName, Type::Int, desc, required, completor);
 }
 
-XTask &XTask::addDoubleParam(const std::string &paramName, const std::string &desc, bool required,
-                             Parameter::CompletionFunc completor)
+auto XTask::addDoubleParam(const std::string_view &paramName, const std::string_view &desc, bool required,
+                           const CompletionFunc &completor) -> XTask &
 {
-    return addParameter(paramName, Parameter::Type::Double, desc, required, std::move(completor));
+    return addParameter(paramName, Type::Double, desc, required, completor);
 }
 
-XTask &XTask::addBoolParam(const std::string &paramName, const std::string &desc, bool required,
-                           Parameter::CompletionFunc completor)
+auto XTask::addBoolParam(const std::string_view &paramName, const std::string_view &desc, bool required,
+                         const CompletionFunc &completor) -> XTask &
 {
-    return addParameter(paramName, Parameter::Type::Bool, desc, required, std::move(completor));
+    return addParameter(paramName, Type::Bool, desc, required, completor);
 }
 
-auto XTask::addFileParam(const std::string &paramName, const std::string &desc, bool required,
-                         Parameter::CompletionFunc completor) -> XTask &
+auto XTask::addFileParam(const std::string_view &paramName, const std::string_view &desc, bool required,
+                         const CompletionFunc &completor) -> XTask &
 {
-    return addParameter(paramName, Parameter::Type::File, desc, required, std::move(completor));
+    return addParameter(paramName, Type::File, desc, required, completor);
 }
 
-auto XTask::addDirectoryParam(const std::string &paramName, const std::string &desc, bool required,
-                              Parameter::CompletionFunc completor) -> XTask &
+auto XTask::addDirectoryParam(const std::string_view &paramName, const std::string_view &desc, bool required,
+                              const CompletionFunc &completor) -> XTask &
 {
-    return addParameter(paramName, Parameter::Type::Directory, desc, required, std::move(completor));
+    return addParameter(paramName, Type::Directory, desc, required, completor);
 }
 
 auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::string &errorMsg) const -> bool

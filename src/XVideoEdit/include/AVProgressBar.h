@@ -4,9 +4,9 @@
 
 class XExec;
 
-class CVProgressBar : public TaskProgressBar
+class AVProgressBar : public TaskProgressBar
 {
-    DECLARE_CREATE_UN_DEFAULT(CVProgressBar)
+    DECLARE_CREATE_DEFAULT(AVProgressBar)
 public:
     struct ProgressState
     {
@@ -17,10 +17,10 @@ public:
         bool        hasProgress = false;
     };
 
-    CVProgressBar(const ProgressBarConfig::Ptr &config = nullptr);
-    CVProgressBar(ProgressBarStyle style);
-    CVProgressBar(const std::string_view &configName);
-    ~CVProgressBar() override;
+    AVProgressBar(const ProgressBarConfig::Ptr &config = nullptr);
+    AVProgressBar(ProgressBarStyle style);
+    AVProgressBar(const std::string_view &configName);
+    ~AVProgressBar() override;
 
 public:
     auto updateProgress(XExec &exec, const std::string_view &taskName,
@@ -28,8 +28,10 @@ public:
 
     auto markAsCompleted(const std::string_view &message) -> void override;
 
+    auto markAsFailed(const std::string_view &message) -> void override;
+
 private:
     class PImpl;
     std::unique_ptr<PImpl> impl_;
 };
-IMPLEMENT_CREATE_UN_DEFAULT(CVProgressBar)
+IMPLEMENT_CREATE_DEFAULT(AVProgressBar)

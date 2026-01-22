@@ -29,7 +29,7 @@ public:
 
     auto markAsCompletedImpl(const std::string_view& message) -> void;
 
-    auto markAsFailedImpl(const std::string& message) -> void;
+    auto markAsFailedImpl(const std::string_view& message) -> void;
 
 public:
     TaskProgressBar*       owner_  = nullptr;
@@ -149,7 +149,7 @@ void TaskProgressBar::PImpl::markAsCompletedImpl(const std::string_view& message
     isActive_ = false;
 }
 
-auto TaskProgressBar::PImpl::markAsFailedImpl(const std::string& message) -> void
+auto TaskProgressBar::PImpl::markAsFailedImpl(const std::string_view& message) -> void
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -212,7 +212,7 @@ auto TaskProgressBar::markAsCompleted(const std::string_view& message) -> void
     show_console_cursor(true);
 }
 
-auto TaskProgressBar::markAsFailed(const std::string& message) -> void
+auto TaskProgressBar::markAsFailed(const std::string_view& message) -> void
 {
     impl_->markAsFailedImpl(message);
 

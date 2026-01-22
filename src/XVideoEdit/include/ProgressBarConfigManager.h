@@ -37,7 +37,6 @@ public:
     template <typename ProgressBarType>
     auto applyConfig(ProgressBarType& progressBar, const ProgressBarConfig::Ptr& config) -> void;
 
-
 private:
     std::mutex                                         mutex_;
     std::map<std::string_view, ProgressBarConfig::Ptr> namedConfigs_;

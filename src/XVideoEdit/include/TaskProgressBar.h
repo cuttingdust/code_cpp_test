@@ -38,7 +38,7 @@ public:
     virtual auto markAsCompleted(const std::string_view& message = "完成 ✓") -> void;
 
     /// 标记为失败
-    virtual auto markAsFailed(const std::string& message = "失败 ✗") -> void;
+    virtual auto markAsFailed(const std::string_view& message = "失败 ✗") -> void;
 
 public:
     /// \brief 设置进度

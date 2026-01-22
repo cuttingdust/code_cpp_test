@@ -1,4 +1,7 @@
+#include "AVProgressBar.h"
 #include "XUserInput.h"
+#include "AVTask.h"
+
 #include <iostream>
 
 int main(int argc, char* argv[])
@@ -11,6 +14,8 @@ int main(int argc, char* argv[])
     user_input.setOnCommandStart([](const std::string& cmd) { std::cout << "开始执行命令: " << cmd << "\n"; });
     user_input.setOnCommandComplete([](const std::string& cmd) { std::cout << "命令执行完成\n"; });
     user_input.setOnError([](const std::string& error) { std::cerr << "执行出错: " << error << "\n"; });
+
+    user_input.getTaskManager().registerType<AVTask, AVProgressBar>("av", "音视频处理任务");
 
     /// 示例1：支持类型的copy任务
     user_input
@@ -235,7 +240,7 @@ int main(int argc, char* argv[])
     /// 示例5：视频转码任务
     user_input
             .registerTask(
-                    "cv", "AV",
+                    "cv", "av",
                     [](const std::map<std::string, XUserInput::ParameterValue>& params)
                     {
                         std::cout << "[转码操作]" << std::endl;

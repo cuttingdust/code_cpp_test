@@ -1,5 +1,4 @@
 ﻿#include "TaskManager.h"
-#include "AVTask.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
@@ -15,40 +14,67 @@ public:
     ~PImpl() = default;
 
 public:
+    auto registerDefaultTaskTypes() -> void;
+
+    auto addExecutionHistory(const std::string_view& taskName, const std::string_view& result) -> void;
+
+    auto updateStatistics(bool success) -> void;
+
+public:
     TaskManager*           owenr_ = nullptr;
     TaskInstanceInfo::List taskInstances_;   ///< 任务实例
     TaskTypeConfig::List   taskTypeConfigs_; ///< 任务类型配置
     mutable std::mutex     mtx_;
+    mutable Statistics     statistics_;       ///< 统计信息
+    TaskHistoryList        executionHistory_; ///< 执行历史
 };
 
 TaskManager::PImpl::PImpl(TaskManager* owenr) : owenr_(owenr)
 {
 }
 
-TaskManager::TaskManager() : impl_(std::make_unique<TaskManager::PImpl>(this))
+auto TaskManager::PImpl::registerDefaultTaskTypes() -> void
 {
-    registerDefaultTaskTypes();
-}
-
-TaskManager::~TaskManager() = default;
-
-void TaskManager::registerDefaultTaskTypes()
-{
-    std::lock_guard<std::mutex> lock(impl_->mtx_);
+    std::lock_guard<std::mutex> lock(mtx_);
 
     /// 注册默认任务类型
-    impl_->taskTypeConfigs_["default"] =
+    taskTypeConfigs_["default"] =
             TaskTypeConfig{ .taskCreator = [](const std::string_view& name, const XTask::TaskFunc& func,
                                               const std::string_view& desc) -> XTask::Ptr
                             { return XTask::create(name, func, desc); },
                             .progressBarCreator = nullptr,
                             .description        = "通用任务" };
 
-    statistics_.totalTaskTypes = impl_->taskTypeConfigs_.size();
+    statistics_.totalTaskTypes = taskTypeConfigs_.size();
 }
 
-auto TaskManager::registerTaskType(const std::string_view& typeName, const TaskCreator& creator,
-                                   const ProgressBarCreator& progressBarCreator, const std::string_view& description)
+auto TaskManager::PImpl::addExecutionHistory(const std::string_view& taskName, const std::string_view& result) -> void
+{
+    auto& history = executionHistory_[std::string{ taskName }];
+    history.emplace_back(result);
+
+    /// 保持历史记录数量不超过100条
+    constexpr size_t MAX_HISTORY = 100;
+    if (history.size() > MAX_HISTORY)
+    {
+        history.erase(history.begin(), history.begin() + (history.size() - MAX_HISTORY));
+    }
+}
+
+auto TaskManager::PImpl::updateStatistics(bool success) -> void
+{
+    (success ? statistics_.successExecutions : statistics_.failedExecutions)++;
+}
+
+TaskManager::TaskManager() : impl_(std::make_unique<TaskManager::PImpl>(this))
+{
+    impl_->registerDefaultTaskTypes();
+}
+
+TaskManager::~TaskManager() = default;
+
+auto TaskManager::registerType(const std::string_view& typeName, const TaskCreator& creator,
+                               const ProgressBarCreator& progressBarCreator, const std::string_view& description)
         -> void
 {
     /// Xtask的工厂
@@ -73,7 +99,7 @@ auto TaskManager::registerTaskType(const std::string_view& typeName, const TaskC
 
     if (isNewType)
     {
-        statistics_.totalTaskTypes++;
+        impl_->statistics_.totalTaskTypes++;
     }
 }
 
@@ -111,7 +137,7 @@ auto TaskManager::getTaskTypeDescription(const std::string_view& typeName) const
     return "未知任务类型: " + std::string{ typeName };
 }
 
-std::optional<TaskManager::TaskTypeConfig> TaskManager::getTaskTypeConfig(const std::string& typeName) const
+auto TaskManager::getTaskTypeConfig(const std::string_view& typeName) const -> TaskTypeConfig::Option
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
@@ -124,7 +150,7 @@ std::optional<TaskManager::TaskTypeConfig> TaskManager::getTaskTypeConfig(const 
     return std::nullopt;
 }
 
-bool TaskManager::removeTaskType(const std::string& typeName)
+auto TaskManager::removeTaskType(const std::string_view& typeName) -> bool
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
@@ -136,7 +162,7 @@ bool TaskManager::removeTaskType(const std::string& typeName)
 
     if (impl_->taskTypeConfigs_.erase(typeName) > 0)
     {
-        statistics_.totalTaskTypes--;
+        impl_->statistics_.totalTaskTypes--;
         return true;
     }
 
@@ -213,7 +239,7 @@ auto TaskManager::createAndRegisterTask(const std::string_view& taskName, const 
     /// 注册任务实例
 
     impl_->taskInstances_[std::string{ taskName }] = std::move(info);
-    statistics_.totalTaskInstances++;
+    impl_->statistics_.totalTaskInstances++;
 
     return task;
 }
@@ -229,7 +255,8 @@ XTask& TaskManager::registerTask(const std::string_view& name, const XTask::Task
     return *task;
 }
 
-bool TaskManager::registerTaskInstance(const std::string& name, XTask::Ptr task, const std::string& typeName)
+auto TaskManager::registerTaskInstance(const std::string_view& name, const XTask::Ptr& task,
+                                       const std::string_view& typeName) -> bool
 {
     if (name.empty() || !task)
     {
@@ -243,25 +270,25 @@ bool TaskManager::registerTaskInstance(const std::string& name, XTask::Ptr task,
         return false;
     }
 
-    TaskInstanceInfo info{ .name             = name,
+    TaskInstanceInfo info{ .name             = std::string{ name },
                            .typeName         = typeName.empty() ? "default" : std::string{ typeName },
-                           .task             = std::move(task),
+                           .task             = task,
                            .createdTime      = std::chrono::system_clock::now(),
                            .lastExecutedTime = std::chrono::system_clock::now() };
 
-    impl_->taskInstances_[name] = std::move(info);
-    statistics_.totalTaskInstances++;
+    impl_->taskInstances_[std::string{ name }] = std::move(info);
+    impl_->statistics_.totalTaskInstances++;
 
     return true;
 }
 
-bool TaskManager::hasTaskInstance(const std::string& name) const
+auto TaskManager::hasTaskInstance(const std::string_view& name) const -> bool
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
     return impl_->taskInstances_.contains(name);
 }
 
-XTask::Ptr TaskManager::getTaskInstance(const std::string& name) const
+auto TaskManager::getTaskInstance(const std::string_view& name) const -> XTask::Ptr
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
@@ -274,15 +301,15 @@ XTask::Ptr TaskManager::getTaskInstance(const std::string& name) const
     return nullptr;
 }
 
-bool TaskManager::executeTask(const std::string& name, const std::map<std::string, std::string>& params,
-                              std::string& error)
+auto TaskManager::executeTask(const std::string_view& name, const std::map<std::string, std::string>& params,
+                              std::string& error) -> bool
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
-    auto it = impl_->taskInstances_.find(name);
+    const auto it = impl_->taskInstances_.find(name);
     if (it == impl_->taskInstances_.end())
     {
-        error = "任务不存在: " + name;
+        error = "任务不存在: " + std::string{ name };
         return false;
     }
 
@@ -291,7 +318,7 @@ bool TaskManager::executeTask(const std::string& name, const std::map<std::strin
 
     if (!task)
     {
-        error = "任务对象无效: " + name;
+        error = "任务对象无效: " + std::string{ name };
         return false;
     }
 
@@ -301,14 +328,14 @@ bool TaskManager::executeTask(const std::string& name, const std::map<std::strin
         taskInfo.lastExecutedTime = now;
         taskInfo.executionCount++;
 
-        statistics_.totalExecutions++;
+        impl_->statistics_.totalExecutions++;
 
         bool success = task->execute(params, error);
 
-        // 更新统计信息
-        updateStatistics(success);
+        /// 更新统计信息
+        impl_->updateStatistics(success);
 
-        // 更新任务实例统计
+        /// 更新任务实例统计
         if (success)
         {
             taskInfo.successCount++;
@@ -318,12 +345,12 @@ bool TaskManager::executeTask(const std::string& name, const std::map<std::strin
             taskInfo.failureCount++;
         }
 
-        // 记录执行历史
+        /// 记录执行历史
         std::stringstream ss;
         auto              time_t_now = std::chrono::system_clock::to_time_t(now);
         ss << std::put_time(std::localtime(&time_t_now), "%Y-%m-%d %H:%M:%S") << " - "
            << (success ? "成功" : "失败: " + error);
-        addExecutionHistory(name, ss.str());
+        impl_->addExecutionHistory(name, ss.str());
 
         return success;
     }
@@ -331,41 +358,41 @@ bool TaskManager::executeTask(const std::string& name, const std::map<std::strin
     {
         error = std::string("执行异常: ") + e.what();
         taskInfo.failureCount++;
-        updateStatistics(false);
+        impl_->updateStatistics(false);
 
         std::stringstream ss;
         auto              now        = std::chrono::system_clock::now();
         auto              time_t_now = std::chrono::system_clock::to_time_t(now);
         ss << std::put_time(std::localtime(&time_t_now), "%Y-%m-%d %H:%M:%S") << " - 异常: " << e.what();
-        addExecutionHistory(name, ss.str());
+        impl_->addExecutionHistory(name, ss.str());
 
         return false;
     }
 }
 
-std::vector<std::string> TaskManager::getTaskInstanceNames() const
+auto TaskManager::getTaskInstanceNames() const -> std::vector<std::string>
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
     std::vector<std::string> names;
     names.reserve(impl_->taskInstances_.size());
 
-    for (const auto& [name, _] : impl_->taskInstances_)
+    for (const auto& name : impl_->taskInstances_ | std::views::keys)
     {
         names.push_back(name);
     }
 
-    std::sort(names.begin(), names.end());
+    std::ranges::sort(names);
     return names;
 }
 
-size_t TaskManager::getTaskInstanceCount() const
+auto TaskManager::getTaskInstanceCount() const -> size_t
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
     return impl_->taskInstances_.size();
 }
 
-auto TaskManager::getTaskInstanceInfo(const std::string& name) const -> TaskInstanceInfo::Option
+auto TaskManager::getTaskInstanceInfo(const std::string_view& name) const -> TaskInstanceInfo::Option
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
     if (const auto it = impl_->taskInstances_.find(name); it != impl_->taskInstances_.end())
@@ -377,41 +404,47 @@ auto TaskManager::getTaskInstanceInfo(const std::string& name) const -> TaskInst
 }
 
 
-bool TaskManager::removeTaskInstance(const std::string& name)
+auto TaskManager::removeTaskInstance(const std::string_view& name) -> bool
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
     if (impl_->taskInstances_.erase(name) > 0)
     {
-        statistics_.totalTaskInstances--;
-        executionHistory_.erase(name);
+        impl_->statistics_.totalTaskInstances--;
+        impl_->executionHistory_.erase(std::string{ name });
         return true;
     }
 
     return false;
 }
 
-void TaskManager::clearAllTaskInstances()
+auto TaskManager::clearAllTaskInstances() -> void
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
     impl_->taskInstances_.clear();
-    executionHistory_.clear();
-    statistics_.totalTaskInstances = 0;
+    impl_->executionHistory_.clear();
+    impl_->statistics_.totalTaskInstances = 0;
 }
 
-TaskManager::Statistics TaskManager::getStatistics() const
+auto TaskManager::getStatistics() const -> TaskManager::Statistics
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
-    return statistics_;
+    return impl_->statistics_;
 }
 
-std::vector<std::string> TaskManager::getTaskExecutionHistory(const std::string& taskName) const
+auto TaskManager::getAllExecutionHistory() const -> TaskHistoryList
+{
+    std::lock_guard<std::mutex> lock(impl_->mtx_);
+    return impl_->executionHistory_;
+}
+
+auto TaskManager::getTaskExecutionHistory(const std::string_view& taskName) const -> TypeHistoryList
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
-    auto it = executionHistory_.find(taskName);
-    if (it != executionHistory_.end())
+    auto it = impl_->executionHistory_.find(std::string{ taskName });
+    if (it != impl_->executionHistory_.end())
     {
         return it->second;
     }
@@ -419,31 +452,26 @@ std::vector<std::string> TaskManager::getTaskExecutionHistory(const std::string&
     return {};
 }
 
-std::map<std::string, std::vector<std::string>> TaskManager::getAllExecutionHistory() const
+
+auto TaskManager::clearTaskHistory(const std::string_view& taskName) -> void
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
-    return executionHistory_;
+    impl_->executionHistory_.erase(std::string{ taskName });
 }
 
-void TaskManager::clearTaskHistory(const std::string& taskName)
+auto TaskManager::clearAllHistory() -> void
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
-    executionHistory_.erase(taskName);
+    impl_->executionHistory_.clear();
 }
 
-void TaskManager::clearAllHistory()
-{
-    std::lock_guard<std::mutex> lock(impl_->mtx_);
-    executionHistory_.clear();
-}
-
-XTask::Ptr TaskManager::createSimpleTask(const std::string_view& taskName, const XTask::TaskFunc& func,
-                                         const std::string_view& description)
+auto TaskManager::createSimpleTask(const std::string_view& taskName, const XTask::TaskFunc& func,
+                                   const std::string_view& description) -> XTask::Ptr
 {
     return createAndRegisterTask(taskName, "default", func, description);
 }
 
-std::map<std::string, std::string> TaskManager::getTaskInfo() const
+auto TaskManager::getTaskInfo() const -> std::map<std::string, std::string>
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
@@ -457,11 +485,11 @@ std::map<std::string, std::string> TaskManager::getTaskInfo() const
     return info;
 }
 
-std::map<std::string, XTask::Ptr, std::less<>>& TaskManager::getTasks()
+auto TaskManager::getTaskInstances() const -> XTask::List
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
-    static std::map<std::string, XTask::Ptr, std::less<>> tasks;
+    static XTask::List tasks;
     tasks.clear();
 
     for (const auto& [name, taskInfo] : impl_->taskInstances_)
@@ -470,46 +498,4 @@ std::map<std::string, XTask::Ptr, std::less<>>& TaskManager::getTasks()
     }
 
     return tasks;
-}
-
-const std::map<std::string, XTask::Ptr, std::less<>>& TaskManager::getTasks() const
-{
-    std::lock_guard<std::mutex> lock(impl_->mtx_);
-
-    static std::map<std::string, XTask::Ptr, std::less<>> tasks;
-    tasks.clear();
-
-    for (const auto& [name, taskInfo] : impl_->taskInstances_)
-    {
-        tasks[name] = taskInfo.task;
-    }
-
-    return tasks;
-}
-
-// =============== 私有辅助方法 ===============
-
-void TaskManager::addExecutionHistory(const std::string& taskName, const std::string& result)
-{
-    auto& history = executionHistory_[taskName];
-    history.push_back(result);
-
-    // 保持历史记录数量不超过100条
-    constexpr size_t MAX_HISTORY = 100;
-    if (history.size() > MAX_HISTORY)
-    {
-        history.erase(history.begin(), history.begin() + (history.size() - MAX_HISTORY));
-    }
-}
-
-void TaskManager::updateStatistics(bool success)
-{
-    if (success)
-    {
-        statistics_.successExecutions++;
-    }
-    else
-    {
-        statistics_.failedExecutions++;
-    }
 }
