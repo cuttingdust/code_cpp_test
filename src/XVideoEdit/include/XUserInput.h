@@ -36,7 +36,7 @@ public:
     using TaskFunc        = XTask::TaskFunc;
     using ParameterValue  = ::ParameterValue;
     using ParsedCommand   = CommandParser::ParsedCommand;
-    using CommandCallback = std::function<void(const std::string&)>;
+    using CommandCallback = std::function<void(const std::string_view&)>;
     using ParsedCallback  = std::function<void(const ParsedCommand&)>;
 
 public:
@@ -91,19 +91,22 @@ public:
 
     auto getStateString() const -> std::string;
 
-public:
-    /// 配置管理
-    void            setConfig(const UIConfig& config);
-    const UIConfig& getConfig() const;
+    ////////////////////////// 配置管理 /////////////////////
+    auto setConfig(const UIConfig& config) -> void;
 
-    /// 历史记录管理
-    void                     clearHistory();
-    std::vector<std::string> getHistory() const;
+    auto getConfig() const -> const UIConfig&;
+
+    ///////////////////////// 历史记录管理 //////////////////
+    auto clearHistory() -> void;
+
+    auto getHistory() const -> std::vector<std::string>;
 
 public:
-    /// 事件回调
+    //////////////////////// 事件回调 ///////////////////////
     auto setOnCommandStart(CommandCallback callback) -> void;
+
     auto setOnCommandComplete(CommandCallback callback) -> void;
+
     auto setOnError(CommandCallback callback) -> void;
 
 private:

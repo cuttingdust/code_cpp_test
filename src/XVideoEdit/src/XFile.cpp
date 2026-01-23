@@ -151,14 +151,14 @@ auto XFile::isPathInput(const std::string_view& input) -> bool
     return false;
 }
 
-bool XFile::isRelativePath(const std::string& path)
+auto XFile::isRelativePath(const std::string_view& path) -> bool
 {
     if (path.empty())
         return false;
 
-    // 检查是否是绝对路径
-    // Windows绝对路径: C:\ 或 \\server\share
-    // Unix绝对路径: 以 / 开头
+    /// 检查是否是绝对路径
+    /// Windows绝对路径: C:\ 或 \\server\share
+    /// Unix绝对路径: 以 / 开头
 #ifdef _WIN32
     if (path.length() >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
     {
@@ -175,41 +175,41 @@ bool XFile::isRelativePath(const std::string& path)
     }
 #endif
 
-    // 相对路径标识
+    /// 相对路径标识
     return path.starts_with("./") || path.starts_with("../") || path.starts_with(".\\") || path.starts_with("..\\") ||
             path == "." || path == "..";
 }
 
-std::string XFile::normalizePath(const std::string& path)
+auto XFile::normalizePath(const std::string_view& path) -> std::string
 {
     try
     {
         fs::path p(path);
 
-        // 如果是相对路径且不是空，转换为绝对路径
+        /// 如果是相对路径且不是空，转换为绝对路径
         if (!p.empty() && isRelativePath(path))
         {
             p = fs::absolute(p);
         }
 
-        // 标准化路径格式
+        /// 标准化路径格式
         p = p.lexically_normal();
 
-        // 确保目录路径以分隔符结尾
+        /// 确保目录路径以分隔符结尾
         if (fs::is_directory(p) && !path.empty() && path.back() != '/' && path.back() != '\\')
         {
-            p = p / ""; // 添加空路径以保留目录分隔符
+            p = p / ""; /// 添加空路径以保留目录分隔符
         }
 
         return p.string();
     }
     catch (...)
     {
-        return path; // 出错时返回原路径
+        return std::string{ path }; /// 出错时返回原路径
     }
 }
 
-std::string XFile::getParentPath(const std::string& path)
+auto XFile::getParentPath(const std::string_view& path) -> std::string
 {
     try
     {
@@ -221,12 +221,12 @@ std::string XFile::getParentPath(const std::string& path)
     }
     catch (...)
     {
-        // 忽略错误
+        /// 忽略错误
     }
     return "";
 }
 
-std::string XFile::getFileName(const std::string& path)
+auto XFile::getFileName(const std::string_view& path) -> std::string
 {
     try
     {
@@ -239,7 +239,7 @@ std::string XFile::getFileName(const std::string& path)
     }
 }
 
-std::string XFile::getFileExtension(const std::string& path)
+auto XFile::getFileExtension(const std::string_view& path) -> std::string
 {
     try
     {
@@ -247,7 +247,7 @@ std::string XFile::getFileExtension(const std::string& path)
         std::string ext = p.extension().string();
         if (!ext.empty() && ext[0] == '.')
         {
-            ext = ext.substr(1); // 移除开头的点
+            ext = ext.substr(1); /// 移除开头的点
         }
         return ext;
     }
@@ -257,9 +257,9 @@ std::string XFile::getFileExtension(const std::string& path)
     }
 }
 
-// ==================== 文件检测 ====================
+/// ==================== 文件检测 ====================
 
-bool XFile::fileExists(const std::string& path)
+auto XFile::fileExists(const std::string_view& path) -> bool
 {
     try
     {
@@ -271,7 +271,7 @@ bool XFile::fileExists(const std::string& path)
     }
 }
 
-bool XFile::isDirectory(const std::string& path)
+auto XFile::isDirectory(const std::string_view& path) -> bool
 {
     try
     {
@@ -283,7 +283,7 @@ bool XFile::isDirectory(const std::string& path)
     }
 }
 
-bool XFile::isRegularFile(const std::string& path)
+auto XFile::isRegularFile(const std::string_view& path) -> bool
 {
     try
     {
@@ -295,22 +295,22 @@ bool XFile::isRegularFile(const std::string& path)
     }
 }
 
-bool XFile::isHiddenFile(const std::string& path)
+auto XFile::isHiddenFile(const std::string_view& path) -> bool
 {
     try
     {
         fs::path    p(path);
         std::string name = p.filename().string();
 
-        // Unix隐藏文件以点开头
+        /// Unix隐藏文件以点开头
         if (!name.empty() && name[0] == '.')
         {
             return true;
         }
 
 #ifdef _WIN32
-        // Windows隐藏文件属性检查
-        DWORD attrs = GetFileAttributesW(p.wstring().c_str());
+        /// Windows隐藏文件属性检查
+        DWORD attrs = ::GetFileAttributesW(p.wstring().c_str());
         if (attrs != INVALID_FILE_ATTRIBUTES)
         {
             return (attrs & FILE_ATTRIBUTE_HIDDEN) != 0;
@@ -326,14 +326,15 @@ bool XFile::isHiddenFile(const std::string& path)
 }
 
 #ifdef _WIN32
-bool XFile::isWindowsExecutable(const fs::path& path)
+auto XFile::isWindowsExecutable(const fs::path& path) -> bool
 {
     std::string ext = path.extension().string();
     std::ranges::transform(ext, ext.begin(), [](unsigned char c) { return std::tolower(c); });
     return ext == ".exe" || ext == ".bat" || ext == ".cmd" || ext == ".com" || ext == ".msi";
 }
+
 #else
-bool XFile::isUnixExecutable(const fs::path& path)
+auto XFile::isWindowsExecutable(const fs::path& path) -> bool
 {
     try
     {
@@ -372,10 +373,10 @@ auto XFile::isExecutable(const std::string_view& path) -> bool
     }
 }
 
-// ==================== 目录遍历 ====================
+/// ==================== 目录遍历 ====================
 
-std::vector<XFile::FileEntry> XFile::listDirectory(const std::string& dirPath, bool showHidden,
-                                                   const std::string& prefix)
+auto XFile::listDirectory(const std::string_view& dirPath, bool showHidden, const std::string_view& prefix)
+        -> std::vector<XFile::FileEntry>
 {
     std::vector<FileEntry> entries;
 
@@ -395,13 +396,13 @@ std::vector<XFile::FileEntry> XFile::listDirectory(const std::string& dirPath, b
             {
                 std::string name = entry.path().filename().string();
 
-                // 过滤隐藏文件
+                /// 过滤隐藏文件
                 if (!showHidden && !prefix.empty() && name[0] == '.')
                 {
                     continue;
                 }
 
-                // 过滤前缀不匹配的
+                /// 过滤前缀不匹配的
                 if (!prefix.empty() && !name.starts_with(prefix))
                 {
                     continue;
@@ -427,39 +428,38 @@ std::vector<XFile::FileEntry> XFile::listDirectory(const std::string& dirPath, b
             }
             catch (...)
             {
-                // 跳过无法访问的文件
+                /// 跳过无法访问的文件
                 continue;
             }
         }
 
-        // 排序：目录在前，文件在后，按名称排序
-        std::sort(entries.begin(), entries.end(),
-                  [](const FileEntry& a, const FileEntry& b)
-                  {
-                      if (a.isDirectory != b.isDirectory)
-                      {
-                          return a.isDirectory > b.isDirectory; // 目录在前
-                      }
-                      return a.name < b.name;
-                  });
+        /// 排序：目录在前，文件在后，按名称排序
+        std::ranges::sort(entries,
+                          [](const FileEntry& a, const FileEntry& b)
+                          {
+                              if (a.isDirectory != b.isDirectory)
+                              {
+                                  return a.isDirectory > b.isDirectory; /// 目录在前
+                              }
+                              return a.name < b.name;
+                          });
     }
     catch (...)
     {
-        // 忽略目录访问错误
+        /// 忽略目录访问错误
     }
 
     return entries;
 }
 
-std::vector<std::string> XFile::findFiles(const std::string&                           dirPath,
-                                          const std::function<bool(const FileEntry&)>& filter)
+auto XFile::findFiles(const std::string_view& dirPath, const std::function<bool(const FileEntry&)>& filter)
+        -> std::vector<std::string>
 {
     std::vector<std::string> results;
 
     try
     {
-        auto entries = listDirectory(dirPath, true);
-        for (const auto& entry : entries)
+        for (const auto entries = listDirectory(dirPath, true); const auto& entry : entries)
         {
             if (filter(entry))
             {
@@ -469,183 +469,16 @@ std::vector<std::string> XFile::findFiles(const std::string&                    
     }
     catch (...)
     {
-        // 忽略错误
+        /// 忽略错误
     }
 
     return results;
 }
 
-// ==================== 路径补全 ====================
 
-std::vector<XFile::PathCompletion> XFile::getPathCompletions(const std::string& partialPath, bool showHidden)
-{
-    std::vector<PathCompletion> completions;
+/// ==================== 文件信息 ====================
 
-    try
-    {
-        fs::path inputPath(partialPath);
-
-        // 处理空输入
-        if (partialPath.empty())
-        {
-            inputPath = ".";
-        }
-
-        // 确定基路径和前缀
-        fs::path    basePath;
-        std::string prefix;
-
-        if (fs::exists(inputPath) && fs::is_directory(inputPath))
-        {
-            basePath = inputPath;
-            prefix   = "";
-        }
-        else
-        {
-            basePath = inputPath.parent_path();
-            prefix   = inputPath.filename().string();
-
-            if (basePath.empty())
-            {
-                basePath = ".";
-            }
-        }
-
-        // 确保基路径存在
-        if (!fs::exists(basePath) || !fs::is_directory(basePath))
-        {
-            return completions;
-        }
-
-        // 遍历目录
-        auto entries = listDirectory(basePath.string(), showHidden, prefix);
-
-        for (const auto& entry : entries)
-        {
-            PathCompletion completion;
-
-            // 构建补全字符串
-            if (basePath.string() == ".")
-            {
-                // 当前目录
-                completion.completion = entry.name;
-            }
-            else
-            {
-                // 需要构建相对或绝对路径
-                fs::path fullPath(basePath);
-                fullPath /= entry.name;
-
-                // 根据输入决定返回格式
-                if (partialPath.empty() || fs::path(partialPath).is_relative())
-                {
-                    // 保持相对路径
-                    completion.completion = fullPath.lexically_relative(fs::current_path()).string();
-                }
-                else
-                {
-                    // 使用绝对路径
-                    completion.completion = fullPath.string();
-                }
-            }
-
-            // 添加目录分隔符
-            if (entry.isDirectory)
-            {
-                if (!completion.completion.empty() && completion.completion.back() != '/' &&
-                    completion.completion.back() != '\\')
-                {
-                    completion.completion += separator();
-                }
-            }
-
-            completion.isDirectory  = entry.isDirectory;
-            completion.isExecutable = entry.isExecutable;
-
-            completions.push_back(completion);
-        }
-
-        // 排序
-        std::sort(completions.begin(), completions.end(),
-                  [](const PathCompletion& a, const PathCompletion& b)
-                  {
-                      if (a.isDirectory != b.isDirectory)
-                      {
-                          return a.isDirectory > b.isDirectory; // 目录在前
-                      }
-                      return a.completion < b.completion;
-                  });
-    }
-    catch (...)
-    {
-        // 忽略文件系统错误
-    }
-
-    return completions;
-}
-
-// ==================== 智能路径补全 ====================
-
-std::vector<XFile::PathCompletion> XFile::smartPathCompletion(const std::string& input,
-                                                              const std::string& currentWorkingDir)
-{
-    std::vector<PathCompletion> completions;
-
-    // 提取路径部分
-    std::string pathPart = extractPathPart(input);
-    if (pathPart.empty())
-    {
-        // 如果没有明确的路径部分，检查整个输入
-        if (isPathInput(input))
-        {
-            pathPart = input;
-        }
-        else
-        {
-            return completions; // 不是路径输入
-        }
-    }
-
-    // 计算输入中的前缀部分（非路径部分）
-    std::string prefixPart;
-    size_t      pathPos = input.find(pathPart);
-    if (pathPos != std::string::npos)
-    {
-        prefixPart = input.substr(0, pathPos);
-    }
-
-    // 获取路径补全
-    auto pathCompletions = getPathCompletions(pathPart, shouldShowHiddenFiles());
-
-    // 将补全结果与前缀合并
-    for (auto& comp : pathCompletions)
-    {
-        // 智能处理补全字符串
-        if (!prefixPart.empty())
-        {
-            // 如果前缀以空格结尾，直接拼接
-            if (!prefixPart.empty() && prefixPart.back() == ' ')
-            {
-                comp.completion = prefixPart + comp.completion;
-            }
-            // 否则，我们需要替换路径部分
-            else if (pathPos != std::string::npos)
-            {
-                std::string newInput = input;
-                newInput.replace(pathPos, pathPart.length(), comp.completion);
-                comp.completion = newInput;
-            }
-        }
-
-        completions.push_back(comp);
-    }
-
-    return completions;
-}
-
-// ==================== 文件信息 ====================
-
-std::optional<uintmax_t> XFile::getFileSize(const std::string& path)
+auto XFile::getFileSize(const std::string_view& path) -> std::optional<uintmax_t>
 {
     try
     {
@@ -656,12 +489,12 @@ std::optional<uintmax_t> XFile::getFileSize(const std::string& path)
     }
     catch (...)
     {
-        // 忽略错误
+        /// 忽略错误
     }
     return std::nullopt;
 }
 
-std::string XFile::formatFileSize(uintmax_t size)
+auto XFile::formatFileSize(uintmax_t size) -> std::string
 {
     const char* units[]       = { "B", "KB", "MB", "GB", "TB", "PB" };
     int         unitIndex     = 0;
@@ -690,7 +523,7 @@ std::string XFile::formatFileSize(uintmax_t size)
     return ss.str();
 }
 
-std::string XFile::getFileTypeDescription(const std::string& path)
+auto XFile::getFileTypeDescription(const std::string_view& path) -> std::string
 {
     try
     {
@@ -718,14 +551,14 @@ std::string XFile::getFileTypeDescription(const std::string& path)
                 return "可执行文件";
             }
 
-            // 根据扩展名判断文件类型
+            /// 根据扩展名判断文件类型
             std::string ext = getFileExtension(path);
             if (ext.empty())
             {
                 return "文件";
             }
 
-            // 常见的文件类型
+            /// 常见的文件类型
             static const std::map<std::string, std::string> typeMap = { { "txt", "文本文件" },   { "cpp", "C++源文件" },
                                                                         { "h", "头文件" },       { "jpg", "JPEG图像" },
                                                                         { "png", "PNG图像" },    { "mp4", "MP4视频" },
@@ -735,8 +568,7 @@ std::string XFile::getFileTypeDescription(const std::string& path)
             std::string lowerExt = ext;
             std::ranges::transform(lowerExt, lowerExt.begin(), ::tolower);
 
-            auto it = typeMap.find(lowerExt);
-            if (it != typeMap.end())
+            if (const auto it = typeMap.find(lowerExt); it != typeMap.end())
             {
                 return it->second;
             }
@@ -752,7 +584,7 @@ std::string XFile::getFileTypeDescription(const std::string& path)
     }
 }
 
-std::string XFile::separator()
+auto XFile::separator() -> std::string
 {
     std::string dirPath;
 #ifdef _WIN32
@@ -764,21 +596,21 @@ std::string XFile::separator()
     return dirPath;
 }
 
-std::string XFile::getHomeDirectory()
+auto XFile::getHomeDirectory() -> std::string
 {
 #ifdef _WIN32
     wchar_t* path = nullptr;
-    if (SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &path) == S_OK)
+    if (::SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &path) == S_OK)
     {
-        std::wstring wpath(path);
-        CoTaskMemFree(path);
+        const std::wstring wpath(path);
+        ::CoTaskMemFree(path);
 
-        // 转换为UTF-8
-        int size_needed = WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), static_cast<int>(wpath.length()), nullptr, 0,
-                                              nullptr, nullptr);
+        /// 转换为UTF-8
+        int size_needed = ::WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), static_cast<int>(wpath.length()), nullptr, 0,
+                                                nullptr, nullptr);
         std::string result(size_needed, 0);
-        WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), static_cast<int>(wpath.length()), &result[0], size_needed,
-                            nullptr, nullptr);
+        ::WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), static_cast<int>(wpath.length()), &result[0], size_needed,
+                              nullptr, nullptr);
         return result;
     }
 #else
@@ -788,7 +620,7 @@ std::string XFile::getHomeDirectory()
         return home;
     }
 
-    // 回退到passwd文件
+    /// 回退到passwd文件
     struct passwd* pw = getpwuid(getuid());
     if (pw)
     {
@@ -799,7 +631,7 @@ std::string XFile::getHomeDirectory()
     return ".";
 }
 
-std::string XFile::getCurrentWorkingDirectory()
+auto XFile::getCurrentWorkingDirectory() -> std::string
 {
     try
     {
@@ -811,7 +643,7 @@ std::string XFile::getCurrentWorkingDirectory()
     }
 }
 
-bool XFile::setCurrentWorkingDirectory(const std::string& path)
+auto XFile::setCurrentWorkingDirectory(const std::string& path) -> bool
 {
     try
     {
@@ -835,7 +667,7 @@ auto XFile::shouldShowHiddenFiles() -> bool
     return g_showHiddenFiles;
 }
 
-void XFile::setShowHiddenFiles(bool show)
+auto XFile::setShowHiddenFiles(bool show) -> void
 {
     g_showHiddenFiles = show;
 }

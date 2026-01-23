@@ -1,6 +1,8 @@
 ﻿#include "XUserInput.h"
+
 #include "ReplxxConfigurator.h"
 #include "XTool.h"
+
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -13,7 +15,10 @@ public:
     ~PImpl();
 
 public:
+    ///////////////////// 公共接口实现 ///////////////////////////////
     auto registerCommandHandler(const std::string_view& command, ParsedCallback handler) -> void;
+
+    auto handleCommand(const std::string_view& input) -> void;
 
     auto registerBuiltinCommands() -> void;
 
@@ -25,19 +30,55 @@ public:
     auto registerTask(const std::string_view& taskName, const std::string_view& typeName, const XTask::TaskFunc& func,
                       const std::string_view& description) -> XTask&;
 
+    auto handleTaskCommand(const ParsedCommand& cmd) -> void;
+
+    /// 错误处理
+    auto handleError(const std::exception& e) -> void;
+
+    auto handleUnknownError() -> void;
+
+    auto start() -> void;
+
+    auto stop() -> void;
+
+    auto setOnCommandStart(CommandCallback callback) -> void;
+
+    auto setOnCommandComplete(CommandCallback callback) -> void;
+
+    auto setOnError(CommandCallback callback) -> void;
+
 public:
-    /// 辅助方法
+    ///////////////////////////////// 辅助方法 //////////////////////////////
     auto showWelcomeMessage() const -> void;
+
     auto showGoodbyeMessage() const -> void;
-    void showStatus() const;
-    void showHelp() const;
+
+    auto showStatus() const -> void;
+
+    auto showHelp() const -> void;
 
 public:
     auto shouldUseREPL() const -> bool;
+
     auto getStateString() const -> std::string;
+
     auto getTaskCount() const -> size_t;
+
     auto getCommandCount() const -> size_t;
+
     auto isRunning() const -> bool;
+
+    auto clearHistory() -> void;
+
+    auto getHistory() const -> std::vector<std::string>;
+
+    auto getPrompt() const -> std::string;
+
+public:
+    /// 主循环
+    auto runREPLLoop() -> void;
+
+    auto runSimpleLoop() -> void;
 
 public:
     auto getTaskManager() -> TaskManager&;
@@ -45,6 +86,20 @@ public:
     auto getState() const -> InputStateMachine::State;
 
     auto getCompletionManager() -> CompletionManager&;
+
+    auto setConfig(const UIConfig& config) -> void;
+
+    auto getConfig() const -> const UIConfig&;
+
+private:
+    /// 初始化与清理
+    auto initialize() -> void;
+
+    auto initializeREPL() -> void;
+
+    auto initializeSimpleMode() -> void;
+
+    auto cleanup() -> void;
 
 public:
     std::map<std::string, ParsedCallback> commandHandlers_; ///< 自定义命令处理器
@@ -56,65 +111,19 @@ public:
 
     /// 统计
     size_t commandCount_ = 0; /// 内部命令数量
-
-public:
-    /// 公共接口实现
-    auto start() -> void;
-
-    auto stop() -> void;
-
-
-public:
-    void            setConfig(const UIConfig& config);
-    const UIConfig& getConfig() const;
-
-    void                     clearHistory();
-    std::vector<std::string> getHistory() const;
-
-    auto setOnCommandStart(CommandCallback callback) -> void;
-    auto setOnCommandComplete(CommandCallback callback) -> void;
-    auto setOnError(CommandCallback callback) -> void;
-
-private:
-    /// 初始化与清理
-    void initialize();
-    auto initializeREPL() -> void;
-    void initializeSimpleMode();
-    void cleanup();
-
-public:
-    /// 主循环
-    auto runREPLLoop() -> void;
-    void runSimpleLoop();
-
-public:
-    /// 命令处理
-    void handleCommand(const std::string& input);
-    void handleTaskCommand(const CommandParser::ParsedCommand& cmd);
-
-
-public:
-    std::string getPrompt() const;
-
-
-    // 错误处理
-    void handleError(const std::exception& e);
-    void handleUnknownError();
+    size_t successCount_ = 0;
+    size_t errorCount_   = 0;
 
 private:
     UIConfig config_;
 
     /// 核心组件
-    std::unique_ptr<replxx::Replxx>    rx_;
-    std::unique_ptr<InputStateMachine> stateMachine_;
-    std::unique_ptr<CommandParser>     commandParser_;
-    std::unique_ptr<HistoryManager>    historyManager_;
-    std::unique_ptr<TaskManager>       taskManager_;
-    std::unique_ptr<CompletionManager> completionManager_;
-
-
-    size_t successCount_ = 0;
-    size_t errorCount_   = 0;
+    std::unique_ptr<replxx::Replxx>    rx_                = nullptr;
+    std::unique_ptr<InputStateMachine> stateMachine_      = nullptr;
+    std::unique_ptr<CommandParser>     commandParser_     = nullptr;
+    std::unique_ptr<HistoryManager>    historyManager_    = nullptr;
+    std::unique_ptr<TaskManager>       taskManager_       = nullptr;
+    std::unique_ptr<CompletionManager> completionManager_ = nullptr;
 };
 
 /// =============== 实现 ===============
@@ -126,7 +135,6 @@ XUserInput::PImpl::PImpl(UIConfig config) :
     try
     {
         initialize();
-        stateMachine_->transitionTo(InputStateMachine::State::Running);
     }
     catch (const std::exception& e)
     {
@@ -176,8 +184,9 @@ auto XUserInput::PImpl::registerBuiltinCommands() -> void
     registerCommandHandler(config_.exitCommand,
                            [this](const ParsedCommand&)
                            {
-                               stateMachine_->transitionTo(InputStateMachine::State::ShuttingDown);
+                               stateMachine_->transitionTo(InputStateMachine::State::Running);
                                showGoodbyeMessage();
+                               stateMachine_->transitionTo(InputStateMachine::State::ShuttingDown);
                            });
 
     /// help 命令
@@ -274,14 +283,14 @@ auto XUserInput::PImpl::initializeREPL() -> void
     completionManager_->setTaskList(taskManager_->getTaskInstances());
 }
 
-void XUserInput::PImpl::initializeSimpleMode()
+auto XUserInput::PImpl::initializeSimpleMode() -> void
 {
     /// 简单模式不需要特殊初始化
     /// 可以在这里设置一些简单模式特有的配置
     std::cout << "使用简单输入模式（无智能补全功能）\n";
 }
 
-void XUserInput::PImpl::cleanup()
+auto XUserInput::PImpl::cleanup() -> void
 {
     if (historyManager_)
     {
@@ -294,12 +303,13 @@ void XUserInput::PImpl::cleanup()
     }
 }
 
-void XUserInput::PImpl::start()
+auto XUserInput::PImpl::start() -> void
 {
     if (stateMachine_->isShuttingDown() || stateMachine_->isError())
     {
         throw std::runtime_error("Cannot start in state: " + getStateString());
     }
+    stateMachine_->transitionTo(InputStateMachine::State::Running);
 
     showWelcomeMessage();
 
@@ -324,7 +334,7 @@ void XUserInput::PImpl::start()
     cleanup();
 }
 
-void XUserInput::PImpl::stop()
+auto XUserInput::PImpl::stop() -> void
 {
     stateMachine_->transitionTo(InputStateMachine::State::ShuttingDown);
 }
@@ -351,7 +361,7 @@ auto XUserInput::PImpl::runREPLLoop() -> void
     }
 }
 
-void XUserInput::PImpl::runSimpleLoop()
+auto XUserInput::PImpl::runSimpleLoop() -> void
 {
     std::cout << "\n使用简单输入模式...\n";
 
@@ -370,7 +380,7 @@ void XUserInput::PImpl::runSimpleLoop()
     }
 }
 
-void XUserInput::PImpl::handleCommand(const std::string& input)
+auto XUserInput::PImpl::handleCommand(const std::string_view& input) -> void
 {
     if (input.empty())
         return;
@@ -391,10 +401,10 @@ void XUserInput::PImpl::handleCommand(const std::string& input)
             throw std::runtime_error("Invalid command format");
         }
 
-        // 添加到历史记录
+        /// 添加到历史记录
         historyManager_->addToHistory(input);
 
-        // 分发命令处理
+        /// 分发命令处理
         if (parsed.command == "task")
         {
             handleTaskCommand(parsed);
@@ -423,7 +433,7 @@ void XUserInput::PImpl::handleCommand(const std::string& input)
     }
 }
 
-void XUserInput::PImpl::handleTaskCommand(const CommandParser::ParsedCommand& cmd)
+auto XUserInput::PImpl::handleTaskCommand(const CommandParser::ParsedCommand& cmd) -> void
 {
     if (cmd.args.empty())
     {
@@ -507,22 +517,22 @@ auto XUserInput::PImpl::getStateString() const -> std::string
     return InputStateMachine::stateToString(getState());
 }
 
-void XUserInput::PImpl::setConfig(const UIConfig& config)
+auto XUserInput::PImpl::setConfig(const UIConfig& config) -> void
 {
     config_ = config;
 }
 
-const UIConfig& XUserInput::PImpl::getConfig() const
+auto XUserInput::PImpl::getConfig() const -> const UIConfig&
 {
     return config_;
 }
 
-void XUserInput::PImpl::clearHistory()
+auto XUserInput::PImpl::clearHistory() -> void
 {
     historyManager_->clearHistory();
 }
 
-std::vector<std::string> XUserInput::PImpl::getHistory() const
+auto XUserInput::PImpl::getHistory() const -> std::vector<std::string>
 {
     return historyManager_->getHistory();
 }
@@ -542,12 +552,12 @@ auto XUserInput::PImpl::setOnCommandStart(CommandCallback callback) -> void
     onCommandStart_ = std::move(callback);
 }
 
-auto XUserInput::PImpl::setOnCommandComplete(std::function<void(const std::string&)> callback) -> void
+auto XUserInput::PImpl::setOnCommandComplete(CommandCallback callback) -> void
 {
     onCommandComplete_ = std::move(callback);
 }
 
-auto XUserInput::PImpl::setOnError(std::function<void(const std::string&)> callback) -> void
+auto XUserInput::PImpl::setOnError(CommandCallback callback) -> void
 {
     onError_ = std::move(callback);
 }
@@ -576,7 +586,7 @@ auto XUserInput::PImpl::showGoodbyeMessage() const -> void
               << "\n\x1b[1;33m再见！\x1b[0m\n";
 }
 
-auto XUserInput::PImpl::showStatus() const -> void
+void XUserInput::PImpl::showStatus() const
 {
     std::cout << "\n=== 系统状态 ===\n"
               << "状态: " << getStateString() << "\n"
@@ -586,7 +596,7 @@ auto XUserInput::PImpl::showStatus() const -> void
               << "================\n";
 }
 
-void XUserInput::PImpl::showHelp() const
+auto XUserInput::PImpl::showHelp() const -> void
 {
     std::cout << "\n=== 任务处理器帮助 ===\n"
               << "任务命令格式: task <任务名> [-参数1 值1] [-参数2 值2] ...\n"
@@ -652,7 +662,7 @@ void XUserInput::PImpl::showHelp() const
     }
 }
 
-std::string XUserInput::PImpl::getPrompt() const
+auto XUserInput::PImpl::getPrompt() const -> std::string
 {
     return std::string(config_.prompt);
 }
@@ -662,7 +672,7 @@ auto XUserInput::PImpl::shouldUseREPL() const -> bool
     return XTool::isInteractiveTerminal() && config_.enableREPL;
 }
 
-void XUserInput::PImpl::handleError(const std::exception& e)
+auto XUserInput::PImpl::handleError(const std::exception& e) -> void
 {
     if (config_.enableColor)
     {
@@ -674,7 +684,7 @@ void XUserInput::PImpl::handleError(const std::exception& e)
     }
 }
 
-void XUserInput::PImpl::handleUnknownError()
+auto XUserInput::PImpl::handleUnknownError() -> void
 {
     if (config_.enableColor)
     {
@@ -750,22 +760,22 @@ auto XUserInput::getStateString() const -> std::string
     return impl_->getStateString();
 }
 
-void XUserInput::setConfig(const UIConfig& config)
+auto XUserInput::setConfig(const UIConfig& config) -> void
 {
     impl_->setConfig(config);
 }
 
-const UIConfig& XUserInput::getConfig() const
+auto XUserInput::getConfig() const -> const UIConfig&
 {
     return impl_->getConfig();
 }
 
-void XUserInput::clearHistory()
+auto XUserInput::clearHistory() -> void
 {
     impl_->clearHistory();
 }
 
-std::vector<std::string> XUserInput::getHistory() const
+auto XUserInput::getHistory() const -> std::vector<std::string>
 {
     return impl_->getHistory();
 }
@@ -785,12 +795,12 @@ auto XUserInput::setOnCommandStart(CommandCallback callback) -> void
     impl_->setOnCommandStart(std::move(callback));
 }
 
-auto XUserInput::setOnCommandComplete(std::function<void(const std::string&)> callback) -> void
+auto XUserInput::setOnCommandComplete(CommandCallback callback) -> void
 {
     impl_->setOnCommandComplete(std::move(callback));
 }
 
-auto XUserInput::setOnError(std::function<void(const std::string&)> callback) -> void
+auto XUserInput::setOnError(CommandCallback callback) -> void
 {
     impl_->setOnError(std::move(callback));
 }

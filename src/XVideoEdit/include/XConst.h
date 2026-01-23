@@ -6,7 +6,7 @@
 #include <functional>
 #include <optional>
 #include <filesystem>
-
+#include <mutex>
 // ==================== 通用工厂宏定义 ====================
 
 namespace fs = std::filesystem;
@@ -40,9 +40,13 @@ public:                                      \
     static auto create(Args &&...args) -> ClassName::Ptr;
 
 /// 声明克隆接口（用于多态对象）
-#define DECLARE_CLONEABLE(ClassName) \
-public:                              \
+#define DECLARE_CLONEABLE_UN(ClassName) \
+public:                                 \
     virtual auto clone() const -> std::unique_ptr<ClassName> = 0;
+
+#define DECLARE_CLONE(ClassName) \
+public:                          \
+    auto clone() const -> ClassName::Ptr;
 
 /// 声明工厂接口（抽象工厂模式）
 #define DECLARE_FACTORY(InterfaceName)                       \
@@ -51,6 +55,14 @@ public:                                                      \
     using FactoryUniquePtr = std::unique_ptr<InterfaceName>; \
     static auto create() -> FactoryPtr;                      \
     static auto createUnique() -> FactoryUniquePtr;
+
+#define DECLARE_CREATE_CLONE(ClassName) \
+    DECLARE_CREATE(ClassName)           \
+    DECLARE_CLONE(ClassName)
+
+#define DECLARE_CREATE_CLONE_UN(ClassName) \
+    DECLARE_CREATE_UN(ClassName)           \
+    DECLARE_CLONE(ClassName)
 
 // ==================== 实现宏定义 ====================
 
@@ -93,10 +105,16 @@ public:                                                      \
     }
 
 /// 实现克隆接口
-#define IMPLEMENT_CLONE(ClassName)                              \
-    auto ClassName::clone() const -> std::unique_ptr<ClassName> \
-    {                                                           \
-        return std::make_unique<ClassName>(*this);              \
+#define IMPLEMENT_CLONE(ClassName)                  \
+    auto ClassName::clone() const -> ClassName::Ptr \
+    {                                               \
+        return std::make_shared<ClassName>(*this);  \
+    }
+
+#define IMPLEMENT_CLONE_UN(ClassName)               \
+    auto ClassName::clone() const -> ClassName::Ptr \
+    {                                               \
+        return std::make_unique<ClassName>(*this);  \
     }
 
 /// 实现模板克隆（用于派生类）
@@ -105,6 +123,14 @@ public:                                                      \
     {                                                           \
         return std::make_unique<ClassName>(*this);              \
     }
+
+#define IMPLEMENT_CREATE_CLONE(ClassName) \
+    IMPLEMENT_CREATE(ClassName)           \
+    IMPLEMENT_CLONE(ClassName)
+
+#define IMPLEMENT_CREATE_CLONE_UN(ClassName) \
+    IMPLEMENT_CREATE_UN(ClassName)           \
+    IMPLEMENT_CLONE_UN(ClassName)
 
 // ==================== 高级工厂宏定义 ====================
 

@@ -8,8 +8,6 @@
 class XExec
 {
 public:
-    using OutputCallback = std::function<void(const std::string& line, bool isStderr)>;
-
     struct XResult
     {
         int         exitCode = -1;
@@ -22,27 +20,36 @@ public:
     XExec(XExec&&) noexcept;
     XExec& operator=(XExec&&) noexcept;
 
-    // 删除拷贝构造和赋值
+    /// 删除拷贝构造和赋值
     XExec(const XExec&)            = delete;
     XExec& operator=(const XExec&) = delete;
+    using OutputCallback           = std::function<void(const std::string_view& line, bool isStderr)>;
 
-    void setOutputCallback(OutputCallback callback);
+public:
+    auto setOutputCallback(const OutputCallback& callback) -> void;
 
-    bool start(const std::string& cmd, bool redirectStderr = true);
+    auto start(const std::string_view& cmd, bool redirectStderr = true) -> bool;
 
-    std::string getStdout() const;
-    std::string getStderr() const;
-    std::string getAllOutput() const;
+    auto isRunning() const -> bool;
 
-    int  wait();
-    bool isRunning() const;
-    bool terminate();
+    /// \brief  等待
+    /// \return 错误码
+    auto wait() -> int;
 
-    static XResult execute(const std::string& command, bool redirectStderr = true, int timeoutMs = 0);
+    auto terminate() -> bool;
+
+    auto getOutput() const -> std::string;
+
+    auto getOutError() const -> std::string;
+
+    auto getOutAll() const -> std::string;
+
+public:
+    static auto execute(const std::string_view& command, bool redirectStderr = true, int timeoutMs = 0) -> XResult;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    class PImpl;
+    std::unique_ptr<PImpl> impl_;
 };
 
 #endif // XEXEC_H

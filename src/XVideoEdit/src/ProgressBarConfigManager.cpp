@@ -1,18 +1,44 @@
 ﻿#include "ProgressBarConfigManager.h"
 #include <indicators/progress_bar.hpp>
-#include <indicators/cursor_control.hpp>
 #include <nlohmann/json.hpp>
 #include <fstream>
 
 using namespace indicators;
 using json = nlohmann::json;
 
-ProgressBarConfigManager::ProgressBarConfigManager()
+
+class ProgressBarConfigManager::PImpl
+{
+public:
+    PImpl(ProgressBarConfigManager* owenr);
+    ~PImpl() = default;
+
+public:
+    auto initPresets() -> void;
+
+    auto registerPreset(const std::string_view& name, const ProgressBarConfig::Ptr& config) -> void;
+
+    auto registerPreset(const ProgressBarStyle& style, const ProgressBarConfig::Ptr& config) -> void;
+
+    auto getConfig(const std::string_view& name) -> ProgressBarConfig::Ptr;
+
+    auto getConfig(const ProgressBarStyle& style) -> ProgressBarConfig::Ptr;
+
+public:
+    ProgressBarConfigManager*                          owenr_ = nullptr;
+    std::mutex                                         mtx_;
+    std::map<std::string_view, ProgressBarConfig::Ptr> namedConfigs_;
+    std::map<ProgressBarStyle, ProgressBarConfig::Ptr> styleConfigs_;
+    ProgressBarConfig::Ptr                             defaultConfig_;
+    std::string                                        barConfig_ = ".bar_config";
+};
+
+ProgressBarConfigManager::PImpl::PImpl(ProgressBarConfigManager* owenr) : owenr_(owenr)
 {
     initPresets();
 }
 
-auto ProgressBarConfigManager::initPresets() -> void
+auto ProgressBarConfigManager::PImpl::initPresets() -> void
 {
     /// 默认配置
     defaultConfig_ = ProgressBarConfig::create();
@@ -65,22 +91,23 @@ auto ProgressBarConfigManager::initPresets() -> void
     registerPreset("error", errorConfig);
 }
 
-auto ProgressBarConfigManager::registerPreset(const std::string_view& name, const ProgressBarConfig::Ptr& config)
+auto ProgressBarConfigManager::PImpl::registerPreset(const std::string_view& name, const ProgressBarConfig::Ptr& config)
         -> void
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mtx_);
     namedConfigs_[name] = config;
 }
 
-auto ProgressBarConfigManager::registerPreset(ProgressBarStyle style, const ProgressBarConfig::Ptr& config) -> void
+auto ProgressBarConfigManager::PImpl::registerPreset(const ProgressBarStyle&       style,
+                                                     const ProgressBarConfig::Ptr& config) -> void
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mtx_);
     styleConfigs_[style] = config;
 }
 
-auto ProgressBarConfigManager::getConfig(const std::string_view& name) -> ProgressBarConfig::Ptr
+auto ProgressBarConfigManager::PImpl::getConfig(const std::string_view& name) -> ProgressBarConfig::Ptr
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mtx_);
     auto                        it = namedConfigs_.find(name);
     if (it != namedConfigs_.end())
     {
@@ -89,9 +116,9 @@ auto ProgressBarConfigManager::getConfig(const std::string_view& name) -> Progre
     return defaultConfig_->clone();
 }
 
-auto ProgressBarConfigManager::getConfig(ProgressBarStyle style) -> ProgressBarConfig::Ptr
+auto ProgressBarConfigManager::PImpl::getConfig(const ProgressBarStyle& style) -> ProgressBarConfig::Ptr
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mtx_);
     auto                        it = styleConfigs_.find(style);
     if (it != styleConfigs_.end())
     {
@@ -100,9 +127,40 @@ auto ProgressBarConfigManager::getConfig(ProgressBarStyle style) -> ProgressBarC
     return defaultConfig_->clone();
 }
 
-auto ProgressBarConfigManager::createConfig(const std::string& name) const -> ProgressBarConfig::Ptr
+ProgressBarConfigManager::ProgressBarConfigManager() : impl_(std::make_unique<ProgressBarConfigManager::PImpl>(this))
 {
-    auto config = defaultConfig_->clone();
+    loadFromFile(impl_->barConfig_);
+}
+
+ProgressBarConfigManager::~ProgressBarConfigManager()
+{
+    saveToFile(impl_->barConfig_);
+}
+
+auto ProgressBarConfigManager::registerPreset(const std::string_view& name, const ProgressBarConfig::Ptr& config)
+        -> void
+{
+    impl_->registerPreset(name, config);
+}
+
+auto ProgressBarConfigManager::registerPreset(ProgressBarStyle style, const ProgressBarConfig::Ptr& config) -> void
+{
+    impl_->registerPreset(style, config);
+}
+
+auto ProgressBarConfigManager::getConfig(const std::string_view& name) -> ProgressBarConfig::Ptr
+{
+    return impl_->getConfig(name);
+}
+
+auto ProgressBarConfigManager::getConfig(const ProgressBarStyle& style) -> ProgressBarConfig::Ptr
+{
+    return impl_->getConfig(style);
+}
+
+auto ProgressBarConfigManager::createConfig(const std::string_view& name) const -> ProgressBarConfig::Ptr
+{
+    auto config = impl_->defaultConfig_->clone();
     if (!name.empty())
     {
         config->themeName = name;
@@ -110,15 +168,15 @@ auto ProgressBarConfigManager::createConfig(const std::string& name) const -> Pr
     return config;
 }
 
-auto ProgressBarConfigManager::saveToFile(const std::string& filename) -> bool
+auto ProgressBarConfigManager::saveToFile(const std::string_view& filename) -> bool
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(impl_->mtx_);
 
     json j;
 
     /// 保存所有命名配置
     json namedConfigsJson = json::object();
-    for (const auto& [name, config] : namedConfigs_)
+    for (const auto& [name, config] : impl_->namedConfigs_)
     {
         json configJson;
         configJson["barWidth"]          = config->barWidth;
@@ -145,7 +203,7 @@ auto ProgressBarConfigManager::saveToFile(const std::string& filename) -> bool
 
     try
     {
-        std::ofstream file(filename);
+        std::ofstream file(std::string{ filename });
         file << j.dump(4); /// 缩进4个空格，便于阅读
         return true;
     }
@@ -155,13 +213,13 @@ auto ProgressBarConfigManager::saveToFile(const std::string& filename) -> bool
     }
 }
 
-auto ProgressBarConfigManager::loadFromFile(const std::string& filename) -> bool
+auto ProgressBarConfigManager::loadFromFile(const std::string_view& filename) -> bool
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(impl_->mtx_);
 
     try
     {
-        std::ifstream file(filename);
+        std::ifstream file(std::string{ filename });
         if (!file.is_open())
         {
             return false;
@@ -170,8 +228,8 @@ auto ProgressBarConfigManager::loadFromFile(const std::string& filename) -> bool
         json j;
         file >> j;
 
-        /// 清空现有配置
-        namedConfigs_.clear();
+        // /// 清空现有配置
+        // impl_->namedConfigs_.clear();
 
         /// 加载命名配置
         if (j.contains("namedConfigs"))
@@ -198,7 +256,7 @@ auto ProgressBarConfigManager::loadFromFile(const std::string& filename) -> bool
                 config->hideCursor        = configJson.value("hideCursor", true);
                 config->themeName         = configJson.value("themeName", "");
 
-                namedConfigs_[name] = config;
+                impl_->namedConfigs_[name] = config;
             }
         }
 

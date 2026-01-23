@@ -1,8 +1,10 @@
 ﻿#include "ReplxxConfigurator.h"
 
-auto ReplxxConfigurator::configure(const std::unique_ptr<replxx::Replxx>& rx,
-                                   const CompletionCallback& completionCallback, const HintCallback& hintCallback)
-        -> void
+using Replxx      = replxx::Replxx;
+using SmartReplxx = std::unique_ptr<Replxx>;
+
+auto ReplxxConfigurator::configure(const SmartReplxx& rx, const CompletionCallback& completionCallback,
+                                   const HintCallback& hintCallback) -> void
 {
     if (!rx)
         return;

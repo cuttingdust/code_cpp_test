@@ -7,11 +7,11 @@ namespace fs = std::filesystem;
 
 struct UIConfig
 {
-    std::string_view prompt      = "\x1b[1;32m>>\x1b[0m ";
-    std::string_view historyFile = ".command_history";
-    fs::path         historyPath = ".command_history";
-    std::string_view exitCommand = "exit";
-    std::string_view helpCommand = "help";
+    std::string prompt      = "\x1b[1;32m>>\x1b[0m ";
+    std::string historyFile = ".command_history";
+    fs::path    historyPath = ".command_history";
+    std::string exitCommand = "exit";
+    std::string helpCommand = "help";
 
     /// 功能开关
     bool enableColor      = true;

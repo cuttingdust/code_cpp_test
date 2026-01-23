@@ -1,7 +1,7 @@
 ﻿/// VideoFileValidator.h
 #pragma once
-#include <string>
-#include <filesystem>
+#include "XConst.h"
+
 #include <set>
 
 class VideoFileValidator
@@ -19,7 +19,7 @@ public:
 
     static auto isVideoFileByExtension(const std::string& filePath, std::string& errorMsg) -> bool;
     static auto isVideoFileByMagicNumber(const std::string& filePath, std::string& errorMsg) -> bool;
-    static bool isVideoFileByFFmpeg(const std::string& filePath, std::string& errorMsg);
+    static auto isVideoFileByFFmpeg(const std::string& filePath, std::string& errorMsg) -> bool;
 
 private:
     static auto getVideoExtensions() -> const std::set<std::string>&;

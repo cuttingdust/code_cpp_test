@@ -9,10 +9,14 @@ public:
     /// \return
     static auto isInteractiveTerminal() -> bool;
 
-    static auto split(const std::string_view& input, char delimiter = ' ', bool trimWhitespace = true)
-        -> std::vector<std::string>;
+    static auto split(const std::string_view &input, char delimiter = ' ', bool trimWhitespace = true)
+            -> std::vector<std::string>;
 
     static auto smartSplit(const std::string &input) -> std::vector<std::string>;
 
     static auto getFFmpegPath() -> std::string;
+
+    static auto getFFProbePath() -> std::string;
+
+    static auto getFFPlayPath() -> std::string;
 };

@@ -406,7 +406,7 @@ auto CompletionManager::PImpl::handleTaskParamCompletion(const std::vector<std::
             }
             else
             {
-                // 参数名部分匹配
+                /// 参数名部分匹配
                 for (const auto& param : taskParams)
                 {
                     if (!usedParams.contains(param.getName()) && param.getName().starts_with(lastToken))
@@ -417,18 +417,18 @@ auto CompletionManager::PImpl::handleTaskParamCompletion(const std::vector<std::
             }
         }
     }
-    else // 最后一个token不是以'-'开头
+    else /// 最后一个token不是以'-'开头
     {
-        // 检查倒数第二个token是否是参数名
+        /// 检查倒数第二个token是否是参数名
         if (tokens.size() >= 3)
         {
             std::string secondLastToken = tokens[tokens.size() - 2];
             if (secondLastToken.starts_with('-'))
             {
-                // 检查这个参数是否已经有值
+                /// 检查这个参数是否已经有值
                 if (paramsWithValue.contains(secondLastToken))
                 {
-                    // 补全新参数
+                    /// 补全新参数
                     for (const auto& param : taskParams)
                     {
                         if (!usedParams.contains(param.getName()))
@@ -439,16 +439,16 @@ auto CompletionManager::PImpl::handleTaskParamCompletion(const std::vector<std::
                 }
                 else
                 {
-                    // 倒数第二个是参数名，当前是参数值
+                    /// 倒数第二个是参数名，当前是参数值
                     auto paramIt = std::ranges::find_if(taskParams, [&secondLastToken](const auto& p)
                                                         { return p.getName() == secondLastToken; });
 
                     if (paramIt != taskParams.end())
                     {
-                        // 使用参数自身的补全建议
+                        /// 使用参数自身的补全建议
                         auto paramCompletions = paramIt->getCompletions(lastToken);
 
-                        // 如果是文件/目录类型且输入看起来像路径，让路径补全处理
+                        /// 如果是文件/目录类型且输入看起来像路径，让路径补全处理
                         if ((paramIt->getType() == Parameter::Type::File ||
                              paramIt->getType() == Parameter::Type::Directory ||
                              paramIt->getType() == Parameter::Type::String) &&
@@ -467,7 +467,7 @@ auto CompletionManager::PImpl::handleTaskParamCompletion(const std::vector<std::
             }
             else
             {
-                // 补全新参数
+                /// 补全新参数
                 for (const auto& param : taskParams)
                 {
                     if (!usedParams.contains(param.getName()))
@@ -479,7 +479,7 @@ auto CompletionManager::PImpl::handleTaskParamCompletion(const std::vector<std::
         }
         else
         {
-            // 直接补全所有参数
+            /// 直接补全所有参数
             for (const auto& param : taskParams)
             {
                 if (!usedParams.contains(param.getName()))

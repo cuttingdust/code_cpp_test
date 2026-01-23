@@ -19,27 +19,30 @@
 #include <errno.h>
 #endif
 
-class XExec::Impl
+class XExec::PImpl
 {
 public:
-    Impl() = default;
-    ~Impl()
-    {
-        cleanup();
-    }
-
-    bool start(const std::string& cmd, bool redirectStderr, OutputCallback callback);
-    int  wait();
-    bool terminate();
-    bool isRunning() const;
-
-    std::string getStdout() const;
-    std::string getStderr() const;
-    std::string getAllOutput() const;
+    PImpl() = default;
+    ~PImpl();
 
 public:
-    void cleanup();
-    void readOutput(bool isStderr);
+    auto start(const std::string_view& cmd, bool redirectStderr, OutputCallback callback) -> bool;
+
+    auto isRunning() const -> bool;
+
+    auto wait() -> int;
+
+    auto terminate() -> bool;
+
+    auto getStdout() const -> std::string;
+
+    auto getStderr() const -> std::string;
+
+    auto getAllOutput() const -> std::string;
+
+public:
+    auto cleanup() -> void;
+    auto readOutput(bool isStderr) -> void;
 
 #ifdef _WIN32
     void closeAllHandles();
@@ -77,7 +80,7 @@ public:
     mutable std::mutex mutex_;
     std::string        stdout_;
     std::string        stderr_;
-    std::atomic<bool>  running_{ false };
+    std::atomic<bool>  isRunning_{ false };
     std::atomic<bool>  terminated_{ false };
     std::atomic<int>   exitCode_{ -1 };
     OutputCallback     outputCallback_;
@@ -85,56 +88,59 @@ public:
     std::thread        stderrThread_;
 };
 
-// XExec 公共接口实现
-XExec::XExec() : impl_(std::make_unique<Impl>())
+XExec::XExec() : impl_(std::make_unique<PImpl>())
 {
 }
 XExec::~XExec()                           = default;
 XExec::XExec(XExec&&) noexcept            = default;
 XExec& XExec::operator=(XExec&&) noexcept = default;
 
-void XExec::setOutputCallback(OutputCallback callback)
+auto XExec::setOutputCallback(const OutputCallback& callback) -> void
 {
-    impl_->outputCallback_ = std::move(callback);
+    impl_->outputCallback_ = callback;
 }
 
-bool XExec::start(const std::string& cmd, bool redirectStderr)
+auto XExec::start(const std::string_view& cmd, bool redirectStderr) -> bool
 {
     return impl_->start(cmd, redirectStderr, impl_->outputCallback_);
 }
 
-std::string XExec::getStdout() const
+auto XExec::getOutput() const -> std::string
 {
     return impl_->getStdout();
 }
-std::string XExec::getStderr() const
+auto XExec::getOutError() const -> std::string
 {
     return impl_->getStderr();
 }
-std::string XExec::getAllOutput() const
+
+auto XExec::getOutAll() const -> std::string
 {
     return impl_->getAllOutput();
 }
-int XExec::wait()
+
+auto XExec::wait() -> int
 {
     return impl_->wait();
 }
-bool XExec::isRunning() const
+
+auto XExec::isRunning() const -> bool
 {
     return impl_->isRunning();
 }
-bool XExec::terminate()
+
+auto XExec::terminate() -> bool
 {
     return impl_->terminate();
 }
 
-// 静态方法实现
-XExec::XResult XExec::execute(const std::string& command, bool redirectStderr, int timeoutMs)
+/// 静态方法实现
+auto XExec::execute(const std::string_view& command, bool redirectStderr, int timeoutMs) -> XExec::XResult
 {
     XExec   exec;
     XResult result;
 
-    // 启动命令
+    /// 启动命令
     if (!exec.start(command, redirectStderr))
     {
         result.exitCode     = -1;
@@ -142,7 +148,7 @@ XExec::XResult XExec::execute(const std::string& command, bool redirectStderr, i
         return result;
     }
 
-    // 设置超时
+    /// 设置超时
     if (timeoutMs > 0)
     {
         auto startTime = std::chrono::steady_clock::now();
@@ -154,7 +160,7 @@ XExec::XResult XExec::execute(const std::string& command, bool redirectStderr, i
             if (elapsed.count() >= timeoutMs)
             {
                 exec.terminate();
-                result.exitCode = -2; // 超时
+                result.exitCode = -2; /// 超时
                 break;
             }
 
@@ -162,18 +168,18 @@ XExec::XResult XExec::execute(const std::string& command, bool redirectStderr, i
         }
     }
 
-    // 等待完成
+    /// 等待完成
     result.exitCode     = exec.wait();
-    result.stdoutOutput = exec.getStdout();
-    result.stderrOutput = exec.getStderr();
+    result.stdoutOutput = exec.getOutput();
+    result.stderrOutput = exec.getOutError();
 
     return result;
 }
 
 #ifdef _WIN32
-// ==================== Windows 实现 ====================
+/// ==================== Windows 实现 ====================
 
-void XExec::Impl::closeAllHandles()
+void XExec::PImpl::closeAllHandles()
 {
     auto closeHandle = [](HANDLE& h)
     {
@@ -190,27 +196,32 @@ void XExec::Impl::closeAllHandles()
     closeHandle(handles_.hStderrWr);
     closeHandle(handles_.hStdinRd);
     closeHandle(handles_.hStdinWr);
-    // 注意：hProcess 在 wait() 中单独处理
+    /// 注意：hProcess 在 wait() 中单独处理
 }
 
-bool XExec::Impl::checkProcessExited()
+auto XExec::PImpl::checkProcessExited() -> bool
 {
     if (handles_.hProcess == INVALID_HANDLE_VALUE)
         return true;
 
     DWORD exitCode = STILL_ACTIVE;
-    if (GetExitCodeProcess(handles_.hProcess, &exitCode))
+    if (::GetExitCodeProcess(handles_.hProcess, &exitCode))
     {
         return exitCode != STILL_ACTIVE;
     }
-    return true; // 获取失败也认为已退出
+    return true; /// 获取失败也认为已退出
 }
 
-bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallback callback)
+XExec::PImpl::~PImpl()
+{
+    cleanup();
+}
+
+auto XExec::PImpl::start(const std::string_view& cmd, bool redirectStderr, OutputCallback callback) -> bool
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    if (running_)
+    if (isRunning_)
     {
         std::cerr << "已有命令正在执行" << std::endl;
         return false;
@@ -221,29 +232,28 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
     stdout_.clear();
     stderr_.clear();
     terminated_ = false;
-    // 删除：reading_ = false;
 
     SECURITY_ATTRIBUTES saAttr;
     saAttr.nLength              = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle       = TRUE;
     saAttr.lpSecurityDescriptor = nullptr;
 
-    // 创建stdout管道
-    if (!CreatePipe(&handles_.hStdoutRd, &handles_.hStdoutWr, &saAttr, 0))
+    /// 创建stdout管道
+    if (!::CreatePipe(&handles_.hStdoutRd, &handles_.hStdoutWr, &saAttr, 0))
     {
         std::cerr << "创建stdout管道失败" << std::endl;
         cleanup();
         return false;
     }
 
-    if (!SetHandleInformation(handles_.hStdoutRd, HANDLE_FLAG_INHERIT, 0))
+    if (!::SetHandleInformation(handles_.hStdoutRd, HANDLE_FLAG_INHERIT, 0))
     {
         std::cerr << "设置stdout管道信息失败" << std::endl;
         cleanup();
         return false;
     }
 
-    // 创建stderr管道（如果不重定向到stdout）
+    /// 创建stderr管道（如果不重定向到stdout）
     if (!redirectStderr)
     {
         if (!CreatePipe(&handles_.hStderrRd, &handles_.hStderrWr, &saAttr, 0))
@@ -253,7 +263,7 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
             return false;
         }
 
-        if (!SetHandleInformation(handles_.hStderrRd, HANDLE_FLAG_INHERIT, 0))
+        if (!::SetHandleInformation(handles_.hStderrRd, HANDLE_FLAG_INHERIT, 0))
         {
             std::cerr << "设置stderr管道信息失败" << std::endl;
             cleanup();
@@ -261,7 +271,7 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
         }
     }
 
-    // 创建stdin管道
+    /// 创建stdin管道
     if (!CreatePipe(&handles_.hStdinRd, &handles_.hStdinWr, &saAttr, 0))
     {
         std::cerr << "创建stdin管道失败" << std::endl;
@@ -269,7 +279,7 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
         return false;
     }
 
-    if (!SetHandleInformation(handles_.hStdinWr, HANDLE_FLAG_INHERIT, 0))
+    if (!::SetHandleInformation(handles_.hStdinWr, HANDLE_FLAG_INHERIT, 0))
     {
         std::cerr << "设置stdin管道信息失败" << std::endl;
         cleanup();
@@ -287,19 +297,19 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
     siStartInfo.hStdError  = redirectStderr ? handles_.hStdoutWr : handles_.hStderrWr;
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
-    std::string cmdCopy = cmd; // 创建副本，CreateProcessA可能修改字符串
+    std::string cmdCopy = std::string{ cmd }; /// 创建副本，CreateProcessA可能修改字符串
     BOOL bSuccess = CreateProcessA(nullptr, cmdCopy.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr,
                                    &siStartInfo, &piProcInfo);
 
-    // 关闭子进程不用的句柄（重要！）
-    CloseHandle(handles_.hStdoutWr);
+    /// 关闭子进程不用的句柄（重要！）
+    ::CloseHandle(handles_.hStdoutWr);
     handles_.hStdoutWr = INVALID_HANDLE_VALUE;
-    CloseHandle(handles_.hStdinRd);
+    ::CloseHandle(handles_.hStdinRd);
     handles_.hStdinRd = INVALID_HANDLE_VALUE;
 
     if (!redirectStderr)
     {
-        CloseHandle(handles_.hStderrWr);
+        ::CloseHandle(handles_.hStderrWr);
         handles_.hStderrWr = INVALID_HANDLE_VALUE;
     }
 
@@ -312,40 +322,30 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
     }
 
     handles_.hProcess = piProcInfo.hProcess;
-    CloseHandle(piProcInfo.hThread); // 线程句柄不需要
+    ::CloseHandle(piProcInfo.hThread); /// 线程句柄不需要
 
-    // 关键：先设置 running_，然后立即启动线程
-    running_.store(true, std::memory_order_release);
+    isRunning_.store(true, std::memory_order_release);
 
-    // 直接启动线程，不需要检查
-    stdoutThread_ = std::thread(
-            [this]()
-            {
-                readOutput(false); // 直接调用
-            });
+    /// 直接启动线程，不需要检查
+    stdoutThread_ = std::thread([this]() { readOutput(false); });
 
     if (!redirectStderr)
     {
-        stderrThread_ = std::thread(
-                [this]()
-                {
-                    readOutput(true); // 直接调用
-                });
+        stderrThread_ = std::thread([this]() { readOutput(true); });
     }
 
     return true;
 }
 
-void XExec::Impl::readOutput(bool isStderr)
+auto XExec::PImpl::readOutput(bool isStderr) -> void
 {
     HANDLE hPipe = isStderr ? handles_.hStderrRd : handles_.hStdoutRd;
     char   buffer[4096];
     DWORD  bytesRead;
 
-    // 使用 running_ 作为条件，而不是 reading_
-    while (running_.load(std::memory_order_acquire))
+    while (isRunning_.load(std::memory_order_acquire))
     {
-        BOOL readResult = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, nullptr);
+        BOOL readResult = ::ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL);
 
         if (readResult && bytesRead > 0)
         {
@@ -364,7 +364,7 @@ void XExec::Impl::readOutput(bool isStderr)
 
             if (outputCallback_)
             {
-                // 按行回调
+                /// 按行回调
                 std::istringstream stream(output);
                 std::string        line;
                 while (std::getline(stream, line))
@@ -382,35 +382,35 @@ void XExec::Impl::readOutput(bool isStderr)
         }
         else
         {
-            // 检查是否应该退出
+            /// 检查是否应该退出
             DWORD error = GetLastError();
             if (error == ERROR_BROKEN_PIPE || error == ERROR_NO_DATA || bytesRead == 0)
             {
-                // 管道已关闭，正常退出
-                running_.store(false, std::memory_order_release);
+                /// 管道已关闭，正常退出
+                isRunning_.store(false, std::memory_order_release);
                 break;
             }
 
-            // 短暂休眠避免忙等待
-            Sleep(10);
+            /// 短暂休眠避免忙等待
+            ::Sleep(10);
         }
     }
 }
 
-int XExec::Impl::wait()
+auto XExec::PImpl::wait() -> int
 {
-    if (!running_ && exitCode_ != -1)
+    if (!isRunning_ && exitCode_ != -1)
     {
         return exitCode_;
     }
 
-    // 步骤1：等待进程退出
+    /// 步骤1：等待进程退出
     if (handles_.hProcess != INVALID_HANDLE_VALUE)
     {
-        WaitForSingleObject(handles_.hProcess, INFINITE);
+        ::WaitForSingleObject(handles_.hProcess, INFINITE);
 
         DWORD dwExitCode;
-        if (GetExitCodeProcess(handles_.hProcess, &dwExitCode))
+        if (::GetExitCodeProcess(handles_.hProcess, &dwExitCode))
         {
             exitCode_ = static_cast<int>(dwExitCode);
         }
@@ -420,10 +420,10 @@ int XExec::Impl::wait()
         }
     }
 
-    // 步骤2：关闭管道，让读取线程自然退出
+    /// 步骤2：关闭管道，让读取线程自然退出
     closeAllHandles();
 
-    // 步骤3：等待线程结束
+    /// 步骤3：等待线程结束
     if (stdoutThread_.joinable())
     {
         stdoutThread_.join();
@@ -434,22 +434,22 @@ int XExec::Impl::wait()
         stderrThread_.join();
     }
 
-    // 步骤4：关闭进程句柄
+    /// 步骤4：关闭进程句柄
     if (handles_.hProcess != INVALID_HANDLE_VALUE)
     {
-        CloseHandle(handles_.hProcess);
+        ::CloseHandle(handles_.hProcess);
         handles_.hProcess = INVALID_HANDLE_VALUE;
     }
 
-    // 步骤5：最后更新状态
-    running_.store(false, std::memory_order_release);
+    /// 步骤5：最后更新状态
+    isRunning_.store(false, std::memory_order_release);
 
     return exitCode_;
 }
 
-bool XExec::Impl::terminate()
+auto XExec::PImpl::terminate() -> bool
 {
-    if (!running_ || handles_.hProcess == INVALID_HANDLE_VALUE)
+    if (!isRunning_ || handles_.hProcess == INVALID_HANDLE_VALUE)
     {
         return false;
     }
@@ -462,14 +462,14 @@ bool XExec::Impl::terminate()
         return false;
     }
 
-    wait(); // 等待清理
+    wait(); /// 等待清理
     return true;
 }
 
 #else
 // ==================== Linux/macOS 实现 ====================
 
-void XExec::Impl::closeAllFds()
+void XExec::PImpl::closeAllFds()
 {
     auto closeFd = [](int& fd)
     {
@@ -485,7 +485,7 @@ void XExec::Impl::closeAllFds()
     closeFd(handles_.stdinFd);
 }
 
-bool XExec::Impl::checkProcessExited()
+bool XExec::PImpl::checkProcessExited()
 {
     if (handles_.pid <= 0)
         return true;
@@ -495,11 +495,11 @@ bool XExec::Impl::checkProcessExited()
     return result > 0;
 }
 
-bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallback callback)
+bool XExec::PImpl::start(const std::string& cmd, bool redirectStderr, OutputCallback callback)
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    if (running_)
+    if (isRunning_)
     {
         std::cerr << "已有命令正在执行" << std::endl;
         return false;
@@ -621,8 +621,8 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
             fcntl(handles_.stderrFd, F_SETFL, O_NONBLOCK);
         }
 
-        // 关键：先设置 running_，然后立即启动线程
-        running_.store(true, std::memory_order_release);
+        // 关键：先设置 isRunning_，然后立即启动线程
+        isRunning_.store(true, std::memory_order_release);
 
         // 直接启动线程
         stdoutThread_ = std::thread([this]() { readOutput(false); });
@@ -636,13 +636,13 @@ bool XExec::Impl::start(const std::string& cmd, bool redirectStderr, OutputCallb
     return true;
 }
 
-void XExec::Impl::readOutput(bool isStderr)
+void XExec::PImpl::readOutput(bool isStderr)
 {
     int  fd = isStderr ? handles_.stderrFd : handles_.stdoutFd;
     char buffer[4096];
 
-    // 使用 running_ 作为条件
-    while (running_.load(std::memory_order_acquire))
+    // 使用 isRunning_ 作为条件
+    while (isRunning_.load(std::memory_order_acquire))
     {
         ssize_t bytesRead = read(fd, buffer, sizeof(buffer) - 1);
 
@@ -696,9 +696,9 @@ void XExec::Impl::readOutput(bool isStderr)
     }
 }
 
-int XExec::Impl::wait()
+int XExec::PImpl::wait()
 {
-    if (!running_ && exitCode_ != -1)
+    if (!isRunning_ && exitCode_ != -1)
     {
         return exitCode_;
     }
@@ -738,7 +738,7 @@ int XExec::Impl::wait()
     }
 
     // 步骤4：最后更新状态
-    running_.store(false, std::memory_order_release);
+    isRunning_.store(false, std::memory_order_release);
 
     // 步骤5：清理
     cleanup();
@@ -746,9 +746,9 @@ int XExec::Impl::wait()
     return exitCode_;
 }
 
-bool XExec::Impl::terminate()
+bool XExec::PImpl::terminate()
 {
-    if (!running_ || handles_.pid <= 0)
+    if (!isRunning_ || handles_.pid <= 0)
     {
         return false;
     }
@@ -785,30 +785,30 @@ bool XExec::Impl::terminate()
 
 // ==================== 跨平台通用实现 ====================
 
-bool XExec::Impl::isRunning() const
+auto XExec::PImpl::isRunning() const -> bool
 {
-    return running_;
+    return isRunning_;
 }
 
-std::string XExec::Impl::getStdout() const
+auto XExec::PImpl::getStdout() const -> std::string
 {
     std::lock_guard<std::mutex> lock(mutex_);
     return stdout_;
 }
 
-std::string XExec::Impl::getStderr() const
+std::string XExec::PImpl::getStderr() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
     return stderr_;
 }
 
-std::string XExec::Impl::getAllOutput() const
+auto XExec::PImpl::getAllOutput() const -> std::string
 {
     std::lock_guard<std::mutex> lock(mutex_);
     return stdout_ + stderr_;
 }
 
-void XExec::Impl::cleanup()
+auto XExec::PImpl::cleanup() -> void
 {
 #ifdef _WIN32
     auto closeHandle = [](HANDLE& h)
@@ -843,6 +843,5 @@ void XExec::Impl::cleanup()
     handles_.pid = -1;
 #endif
 
-    running_.store(false, std::memory_order_release);
-    // 删除：reading_ = false;
+    isRunning_.store(false, std::memory_order_release);
 }

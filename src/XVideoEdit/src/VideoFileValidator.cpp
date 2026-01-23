@@ -2,6 +2,7 @@
 
 #include "XFile.h"
 #include "XExec.h"
+#include "XTool.h"
 
 #include <fstream>
 #include <algorithm>
@@ -201,11 +202,11 @@ auto VideoFileValidator::isVideoFileByMagicNumber(const std::string& filePath, s
     }
 }
 
-bool VideoFileValidator::isVideoFileByFFmpeg(const std::string& filePath, std::string& errorMsg)
+auto VideoFileValidator::isVideoFileByFFmpeg(const std::string& filePath, std::string& errorMsg) -> bool
 {
     try
     {
-        std::string command = std::string(FFPROBE_PATH) +
+        std::string command = XTool::getFFProbePath() +
                 " -v error -select_streams v:0 -show_entries stream=codec_type "
                 "-of default=noprint_wrappers=1:nokey=1 \"" +
                 filePath + "\"";
@@ -238,7 +239,7 @@ bool VideoFileValidator::isVideoFileByFFmpeg(const std::string& filePath, std::s
 }
 
 
-const std::set<std::string>& VideoFileValidator::getVideoExtensions()
+auto VideoFileValidator::getVideoExtensions() -> const std::set<std::string>&
 {
     static const std::set<std::string> videoExtensions = { /// MP4 相关
                                                            ".mp4", ".m4v", ".m4a", ".m4b", ".m4p", ".m4r",

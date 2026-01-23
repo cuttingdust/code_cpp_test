@@ -208,7 +208,7 @@ auto AVTask::PImpl::executeFFmpegCommand(const std::string&                     
         errorMsg = "转码过程失败，退出码: " + std::to_string(exitCode);
 
         /// 获取错误输出
-        std::string stderrOutput = exec.getStderr();
+        std::string stderrOutput = exec.getOutError();
         if (!stderrOutput.empty())
         {
             errorMsg += "\n错误信息: " + stderrOutput;

@@ -56,7 +56,6 @@ TaskProgressBar::PImpl::PImpl(TaskProgressBar* owner_, const ProgressBarConfig::
     // bar_.set_option(option::ShowRemainingTime{ true });
     // bar_.set_option(option::ForegroundColor{ Color::magenta });
     // bar_.set_option(option::FontStyles{ std::vector<FontStyle>{ FontStyle::bold } });
-
     ProgressBarConfigManager::getInstance()->applyConfig(bar_, config_);
 }
 

@@ -47,7 +47,7 @@ enum class BarColor
 
 struct ProgressBarConfig
 {
-    DECLARE_CREATE(ProgressBarConfig)
+    DECLARE_CREATE_CLONE(ProgressBarConfig)
     /// 基本配置
     int         barWidth{ 50 };
     std::string startSymbol{ "[" };
@@ -76,7 +76,4 @@ struct ProgressBarConfig
     /// 主题相关
     ProgressBarStyle style{ ProgressBarStyle::Default };
     std::string      themeName{ "default" };
-
-    /// 创建配置副本
-    auto clone() const -> ProgressBarConfig::Ptr;
 };

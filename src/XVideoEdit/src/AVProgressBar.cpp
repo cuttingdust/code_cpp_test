@@ -12,9 +12,9 @@ public:
     ~PImpl() = default;
 
 public:
-    auto showWithFfmpegImpl(XExec& exec, const std::string_view& srcPath, const std::string_view& dstPath) -> void;
+    auto showWithFfmpegImpl(XExec &exec, const std::string_view &srcPath, const std::string_view &dstPath) -> void;
 
-    auto estimateTotalDuration(const std::string_view& srcPath) const -> float;
+    auto estimateTotalDuration(const std::string_view &srcPath) const -> float;
 
     auto formatDuration(float seconds) const -> std::string;
 
@@ -52,7 +52,7 @@ auto AVProgressBar::PImpl::showWithFfmpegImpl(XExec &exec, const std::string_vie
 
     auto progressState = std::make_shared<ProgressState>();
     exec.setOutputCallback(
-            [progressState](const std::string &line, bool isStderr)
+            [progressState](const std::string_view &line, bool isStderr)
             {
                 if (!isStderr)
                 {
@@ -84,7 +84,7 @@ auto AVProgressBar::PImpl::showWithFfmpegImpl(XExec &exec, const std::string_vie
                         size_t end = line.find(' ', speedPos);
                         if (end == std::string::npos)
                             end = line.length();
-                        std::string rawSpeed = line.substr(speedPos + 6, end - speedPos - 6);
+                        std::string rawSpeed = std::string{ line }.substr(speedPos + 6, end - speedPos - 6);
 
                         /// 清理速度字符串（移除可能的空格）
                         std::erase(rawSpeed, ' ');
@@ -314,7 +314,7 @@ auto AVProgressBar::PImpl::estimateTotalDuration(const std::string_view &srcPath
     if (exec.start(ffprobeCmd, true))
     {
         exec.wait();
-        std::string output = exec.getStdout();
+        std::string output = exec.getOutput();
 
         try
         {
@@ -329,7 +329,7 @@ auto AVProgressBar::PImpl::estimateTotalDuration(const std::string_view &srcPath
         }
         catch (...)
         {
-            // 解析失败
+            /// 解析失败
         }
     }
 

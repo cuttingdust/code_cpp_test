@@ -3,6 +3,7 @@
 #include "XTask.h"
 #include <replxx.hxx>
 
+
 class CompletionManager
 {
 public:

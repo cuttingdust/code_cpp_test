@@ -21,7 +21,7 @@ public:
     auto saveHistory() -> void;
 
     /// 添加到历史记录
-    auto addToHistory(const std::string& input) -> void;
+    auto addToHistory(const std::string_view& input) -> void;
 
     /// 清空历史记录
     auto clearHistory() -> void;
@@ -36,12 +36,6 @@ public:
     auto getRecentHistory(int count = 10) -> std::vector<std::string>;
 
 private:
-    /// 更新内部缓存
-    auto updateHistoryCache() -> void;
-
-private:
-    std::unique_ptr<replxx::Replxx>& rx_;
-    const UIConfig&                  config_;
-    std::vector<std::string>         historyCache_;
-    bool                             cacheDirty_ = true;
+    class PImpl;
+    std::unique_ptr<PImpl> impl_;
 };

@@ -101,3 +101,21 @@ auto XTool::getFFmpegPath() -> std::string
     return "ffmpeg";
 #endif
 }
+
+auto XTool::getFFProbePath() -> std::string
+{
+#ifdef FFPROBE_PATH
+    return FFPROBE_PATH;
+#else
+    return "ffprobe";
+#endif
+}
+
+auto XTool::getFFPlayPath() -> std::string
+{
+#ifdef FFPLAY_PATH
+    return FFPLAY_PATH;
+#else
+    return "ffplay";
+#endif
+}

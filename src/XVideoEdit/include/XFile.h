@@ -6,21 +6,40 @@ class XFile
 {
 public:
     /// ==================== 路径操作 ====================
-    static auto        extractPathPart(const std::string_view& input) -> std::string;
-    static auto        isPathInput(const std::string_view& input) -> bool;
-    static bool        isRelativePath(const std::string& path);
-    static std::string normalizePath(const std::string& path);
-    static std::string getParentPath(const std::string& path);
-    static std::string getFileName(const std::string& path);
-    static std::string getFileExtension(const std::string& path);
 
+    /// 提取路径
+    static auto extractPathPart(const std::string_view& input) -> std::string;
+
+    /// 是否是目录输入
+    static auto isPathInput(const std::string_view& input) -> bool;
+
+    /// 是否是相对路径
+    static auto isRelativePath(const std::string_view& path) -> bool;
+
+    /// \brief 格式化目录
+    /// \param path
+    /// \return 格式化的绝对路径
+    static auto normalizePath(const std::string_view& path) -> std::string;
+
+    static auto getParentPath(const std::string_view& path) -> std::string;
+
+    static auto getFileName(const std::string_view& path) -> std::string;
+
+    static auto getFileExtension(const std::string_view& path) -> std::string;
+
+public:
     /// ==================== 文件检测 ====================
-    static bool fileExists(const std::string& path);
-    static bool isDirectory(const std::string& path);
-    static bool isRegularFile(const std::string& path);
-    static auto isExecutable(const std::string_view& path) -> bool;
-    static bool isHiddenFile(const std::string& path);
+    static auto fileExists(const std::string_view& path) -> bool;
 
+    static auto isDirectory(const std::string_view& path) -> bool;
+
+    static auto isRegularFile(const std::string_view& path) -> bool;
+
+    static auto isExecutable(const std::string_view& path) -> bool;
+
+    static auto isHiddenFile(const std::string_view& path) -> bool;
+
+public:
     /// ==================== 目录遍历 ====================
     struct FileEntry
     {
@@ -31,36 +50,22 @@ public:
         uintmax_t   size;
     };
 
-    static std::vector<FileEntry> listDirectory(const std::string& dirPath, bool showHidden = false,
-                                                const std::string& prefix = "");
+    static auto listDirectory(const std::string_view& dirPath, bool showHidden = false,
+                              const std::string_view& prefix = "") -> std::vector<FileEntry>;
 
-    static std::vector<std::string> findFiles(const std::string&                           dirPath,
-                                              const std::function<bool(const FileEntry&)>& filter);
-
-    /// ==================== 路径补全 ====================
-    struct PathCompletion
-    {
-        std::string completion;
-        bool        isDirectory;
-        bool        isExecutable;
-    };
-
-    static std::vector<PathCompletion> getPathCompletions(const std::string& partialPath, bool showHidden = false);
-
-    /// ==================== 智能路径补全 ====================
-    static std::vector<PathCompletion> smartPathCompletion(const std::string& input,
-                                                           const std::string& currentWorkingDir = ".");
+    static auto findFiles(const std::string_view& dirPath, const std::function<bool(const FileEntry&)>& filter)
+            -> std::vector<std::string>;
 
     /// ==================== 文件信息 ====================
-    static std::optional<uintmax_t> getFileSize(const std::string& path);
-    static std::string              formatFileSize(uintmax_t size);
-    static std::string              getFileTypeDescription(const std::string& path);
+    static auto getFileSize(const std::string_view& path) -> std::optional<uintmax_t>;
+    static auto formatFileSize(uintmax_t size) -> std::string;
+    static auto getFileTypeDescription(const std::string_view& path) -> std::string;
 
     /// ==================== 平台相关 ====================
-    static std::string separator();
-    static std::string getHomeDirectory();
-    static std::string getCurrentWorkingDirectory();
-    static bool        setCurrentWorkingDirectory(const std::string& path);
+    static auto separator() -> std::string;
+    static auto getHomeDirectory() -> std::string;
+    static auto getCurrentWorkingDirectory() -> std::string;
+    static auto setCurrentWorkingDirectory(const std::string& path) -> bool;
 
     /// ==================== 配置 ====================
     static auto shouldShowHiddenFiles() -> bool;
