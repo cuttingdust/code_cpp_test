@@ -4,7 +4,6 @@ get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 project(${CURRENT_DIR})
 
 set(DPS_LIBRARYS
-   ${FFT_MOUDLES}
    replxx::replxx
    indicators::indicators
    nlohmann_json::nlohmann_json
