@@ -62,22 +62,22 @@ message("fmt_VERSION = ${OpenCV_VERSION}")
 message("fmt_LIBS = ${OpenCV_LIBS}")
 
 # replxx
-find_package(replxx CONFIG REQUIRED)
-message("replxx_FOUND = ${replxx_FOUND}")
-message("replxx_VERSION = ${replxx_VERSION}")
-message("replxx_LIBS = ${replxx_LIBS}")
+# find_package(replxx CONFIG REQUIRED)
+# message("replxx_FOUND = ${replxx_FOUND}")
+# message("replxx_VERSION = ${replxx_VERSION}")
+# message("replxx_LIBS = ${replxx_LIBS}")
 
 # indicators
-find_package(indicators CONFIG REQUIRED)
-message("indicators_FOUND = ${indicators_FOUND}")
-message("indicators_VERSION = ${indicators_VERSION}")
-message("indicators_LIBS = ${indicators_LIBS}")
+# find_package(indicators CONFIG REQUIRED)
+# message("indicators_FOUND = ${indicators_FOUND}")
+# message("indicators_VERSION = ${indicators_VERSION}")
+# message("indicators_LIBS = ${indicators_LIBS}")
 
 # nlohmann_json
-find_package(nlohmann_json CONFIG REQUIRED)
-message("nlohmann_json_FOUND = ${nlohmann_json_FOUND}")
-message("nlohmann_json_VERSION = ${nlohmann_json_VERSION}")
-message("nlohmann_json_LIBS = ${nlohmann_json_LIBS}")
+# find_package(nlohmann_json CONFIG REQUIRED)
+# message("nlohmann_json_FOUND = ${nlohmann_json_FOUND}")
+# message("nlohmann_json_VERSION = ${nlohmann_json_VERSION}")
+# message("nlohmann_json_LIBS = ${nlohmann_json_LIBS}")
 
 # OpenCV
 find_package(OpenCV CONFIG REQUIRED)
@@ -143,6 +143,15 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CommonTools)
+
+add_subdirectory(third_party/json)
+set_target_properties(nlohmann_json PROPERTIES FOLDER "third_party")
+
+add_subdirectory(third_party/replxx)
+set_target_properties(replxx PROPERTIES FOLDER "third_party")
+
+add_subdirectory(third_party/indicators)
+set_target_properties(indicators PROPERTIES FOLDER "third_party")
 
 add_subdirectory(MemoryLeakDetector)
 add_subdirectory(GuessWord)
