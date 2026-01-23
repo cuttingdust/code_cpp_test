@@ -1,8 +1,6 @@
 ﻿#include "AVTask.h"
 #include "XExec.h"
 #include "VideoFileValidator.h"
-#include "XFile.h"
-#include "XTool.h"
 
 #include <iostream>
 #include <chrono>
@@ -228,49 +226,83 @@ AVTask::AVTask(const std::string_view& name, const TaskFunc& func, const std::st
 {
 }
 
+
 AVTask::~AVTask() = default;
 
-auto AVTask::execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool
+auto AVTask::validateCommon(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) -> bool
 {
-    /// 1. 参数验证
-    if (!XTask::execute(inputParams, errorMsg))
+    /// 2. 获取基本参数
+    std::string srcPath = getRequiredParam(inputParams, "--input", errorMsg);
+    std::string dstPath = getRequiredParam(inputParams, "--output", errorMsg);
+
+    if (srcPath.empty() || dstPath.empty())
     {
         return false;
     }
 
-    if (getName() == "cv") /// 音频转码
+    /// 3. 文件系统检查
+    if (!impl_->validatePaths(srcPath, dstPath, errorMsg))
     {
-        /// 2. 获取基本参数
-        std::string ffmpegPath = XTool::getFFmpegPath();
-        std::string srcPath    = getRequiredParam(inputParams, "--input", errorMsg);
-        std::string dstPath    = getRequiredParam(inputParams, "--output", errorMsg);
-
-        if (srcPath.empty() || dstPath.empty())
-        {
-            return false;
-        }
-
-        /// 3. 文件系统检查
-        if (!impl_->validatePaths(srcPath, dstPath, errorMsg))
-        {
-            return false;
-        }
-
-        /// 4. 检查是否为视频文件
-        if (!impl_->isVideoFile(srcPath, errorMsg))
-        {
-            return false;
-        }
-
-        /// 5. 构建FFmpeg命令
-        std::string command = impl_->buildFFmpegCommand(ffmpegPath, srcPath, dstPath, inputParams);
-        std::cout << "执行命令: " << command << std::endl;
-
-        /// 6. 执行命令
-        return impl_->executeFFmpegCommand(command, inputParams, errorMsg);
+        return false;
     }
 
+    /// 4. 检查是否为视频文件
+    if (!impl_->isVideoFile(srcPath, errorMsg))
+    {
+        return false;
+    }
     return true;
+}
+
+auto AVTask::execute(const std::string& command, const std::map<std::string, std::string>& inputParams,
+                     std::string& errorMsg) -> bool
+{
+    XExec exec;
+
+    std::string dstPath  = inputParams.at("--output");
+    std::string fileName = fs::path(dstPath).filename().string();
+    setTitle("处理: " + fileName);
+
+    /// 启动命令
+    if (!exec.start(command, true)) /// 合并 stderr 到 stdout
+    {
+        errorMsg = "启动FFmpeg命令失败";
+        return false;
+    }
+
+    /// 显示进度条（使用FFmpeg特定的进度监控）
+    updateProgress(exec, getName(), inputParams);
+
+    /// 等待完成
+    int  exitCode = exec.wait();
+    bool success  = (exitCode == 0);
+
+    /// 验证结果
+    if (success)
+    {
+        if (fs::exists(dstPath) && fs::file_size(dstPath) > 0)
+        {
+            return true;
+        }
+        else
+        {
+            errorMsg = "处理完成但输出文件无效";
+            return false;
+        }
+    }
+    else
+    {
+        errorMsg = "处理过程失败，退出码: " + std::to_string(exitCode);
+
+        /// 获取错误输出
+        std::string stderrOutput = exec.getOutError();
+        if (!stderrOutput.empty())
+        {
+            errorMsg += "\n错误信息: " + stderrOutput;
+        }
+
+        return false;
+    }
 }
 
 

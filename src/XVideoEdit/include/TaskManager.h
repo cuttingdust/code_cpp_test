@@ -60,6 +60,10 @@ public:
     auto registerTask(const std::string_view& name, const XTask::TaskFunc& func,
                       const std::string_view& description = "") -> XTask&;
 
+    template <typename CommandType>
+    auto registerTask(const std::string_view& name, const XTask::TaskFunc& func,
+                      const std::string_view& description = "") -> XTask&;
+
     auto registerTaskInstance(const std::string_view& name, const XTask::Ptr& task,
                               const std::string_view& typeName = "default") -> bool;
 

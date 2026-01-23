@@ -1,6 +1,9 @@
 #include "AVProgressBar.h"
-#include "XUserInput.h"
+#include "ConvertCommandBuilder.h"
+
 #include "AVTask.h"
+
+#include "XUserInput.h"
 
 #include <iostream>
 
@@ -239,7 +242,7 @@ int main(int argc, char* argv[])
 
     /// 示例5：视频转码任务
     user_input
-            .registerTask(
+            .registerTask<ConvertCommandBuilder>(
                     "cv", "av",
                     [](const std::map<std::string, XUserInput::ParameterValue>& params)
                     {
@@ -262,6 +265,7 @@ int main(int argc, char* argv[])
                               static const std::vector<std::string> videoExtensions = { ".mp4", ".avi", ".mov", ".mkv",
                                                                                         ".wmv", ".flv", ".webm" };
                               std::vector<std::string>              suggestions;
+                              suggestions.reserve(videoExtensions.size());
                               for (const auto& ext : videoExtensions)
                               {
                                   suggestions.push_back("video" + ext);
@@ -291,6 +295,186 @@ int main(int argc, char* argv[])
                               }
                               return suggestions;
                           });
+
+    user_input
+            .registerTask(
+                    "cut", "av",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    {
+                        std::cout << "[剪切视频操作]" << std::endl;
+                        auto src = params.at("--input").asString();
+                        auto dst = params.at("--output").asString();
+
+                        /// 处理开始时间
+                        std::string startTime = "00:00:00";
+                        if (params.contains("--start"))
+                        {
+                            startTime = params.at("--start").asString();
+                        }
+
+                        /// 处理结束时间或持续时间
+                        std::string duration;
+                        std::string endTime;
+
+                        if (params.contains("--duration") && params.contains("--end"))
+                        {
+                            std::cout << "警告: 同时指定了 --duration 和 --end 参数，优先使用 --duration" << std::endl;
+                            duration = params.at("--duration").asString();
+                            std::cout << "  剪切设置: 从 " << startTime << " 开始，持续 " << duration << std::endl;
+                        }
+                        else if (params.contains("--duration"))
+                        {
+                            duration = params.at("--duration").asString();
+                            std::cout << "  剪切设置: 从 " << startTime << " 开始，持续 " << duration << std::endl;
+                        }
+                        else if (params.contains("--end"))
+                        {
+                            endTime = params.at("--end").asString();
+                            std::cout << "  剪切设置: 从 " << startTime << " 到 " << endTime << std::endl;
+                        }
+                        else
+                        {
+                            std::cout << "错误: 必须指定 --duration 或 --end 参数之一" << std::endl;
+                            return;
+                        }
+
+                        std::cout << "  源文件: " << src << std::endl;
+                        std::cout << "  目标文件: " << dst << std::endl;
+                    },
+                    "剪切视频文件，支持时间点和持续时间")
+            .addFileParam("--input", "源视频文件路径", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见视频文件扩展名
+                              static const std::vector<std::string> videoExtensions = { ".mp4", ".avi", ".mov",  ".mkv",
+                                                                                        ".wmv", ".flv", ".webm", ".MP4",
+                                                                                        ".AVI", ".MOV", ".MKV",  ".WMV",
+                                                                                        ".FLV", ".WEBM" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& ext : videoExtensions)
+                              {
+                                  suggestions.push_back("video" + ext);
+                              }
+                              return suggestions;
+                          })
+            .addFileParam("--output", "输出文件路径", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见输出文件建议
+                              static const std::vector<std::string> outputSuggestions = {
+                                  "output.mp4", "cut_video.mp4", "trimmed.mp4", "clip.mp4",
+                                  "result.mp4", "output/",       "result/"
+                              };
+                              std::vector<std::string> suggestions;
+                              for (const auto& suggestion : outputSuggestions)
+                              {
+                                  if (suggestion.starts_with(partial))
+                                  {
+                                      suggestions.push_back(suggestion);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addStringParam("--start", "开始时间 (HH:MM:SS 或秒数)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 提供常用的时间点建议
+                                static const std::vector<std::string> timeSuggestions = {
+                                    "00:00:00", "00:00:05", "00:00:10", "00:00:30", "00:01:00", "00:02:00",
+                                    "00:05:00", "00:10:00", "00:30:00", "01:00:00", "0",        "5",
+                                    "10",       "30",       "60",       "120",      "300",      "600"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& time : timeSuggestions)
+                                {
+                                    if (time.starts_with(partial))
+                                    {
+                                        suggestions.push_back(time);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addStringParam("--end", "结束时间 (HH:MM:SS 或秒数)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 提供常用的结束时间建议
+                                static const std::vector<std::string> timeSuggestions = {
+                                    "00:00:30", "00:01:00", "00:02:00", "00:05:00", "00:10:00", "00:30:00",
+                                    "01:00:00", "05:00:00", "10:00:00", "30",       "60",       "120",
+                                    "300",      "600",      "1800",     "3600"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& time : timeSuggestions)
+                                {
+                                    if (time.starts_with(partial))
+                                    {
+                                        suggestions.push_back(time);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addStringParam("--duration", "持续时间 (HH:MM:SS 或秒数)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 提供常用的持续时间建议
+                                static const std::vector<std::string> durationSuggestions = {
+                                    "00:00:05", "00:00:10", "00:00:30", "00:01:00", "00:02:00", "00:05:00",
+                                    "00:10:00", "00:30:00", "01:00:00", "5",        "10",       "30",
+                                    "60",       "120",      "300",      "600",      "1800"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& duration : durationSuggestions)
+                                {
+                                    if (duration.starts_with(partial))
+                                    {
+                                        suggestions.push_back(duration);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addBoolParam("--copy", "使用流复制模式 (快速但不精确)", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",
+                                                                                   "0",    "yes",   "no" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--reencode", "重新编码模式 (精确但较慢)", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",
+                                                                                   "0",    "yes",   "no" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          });
+
 
     /// 注册自定义命令
     user_input.registerCommandHandler("hello",

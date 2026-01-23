@@ -12,6 +12,18 @@ class XTask : public ITask
 {
     DECLARE_CREATE_DEFAULT(XTask)
 public:
+    /// 命令构建器接口
+    class ICommandBuilder
+    {
+    public:
+        virtual ~ICommandBuilder() = default;
+        using Ptr                  = std::shared_ptr<ICommandBuilder>;
+        virtual auto build(const std::map<std::string, std::string>& params) const -> std::string = 0;
+        virtual auto validate(const std::map<std::string, std::string>& params, std::string& errorMsg) const
+                -> bool                                                                              = 0;
+        virtual auto getTitle(const std::map<std::string, std::string>& params) const -> std::string = 0;
+    };
+    using SmartBuilder     = ICommandBuilder::Ptr;
     using List             = std::map<std::string, XTask::Ptr, std::less<>>;
     using Container        = std::vector<XTask::Ptr>;
     using TaskFunc         = std::function<void(const std::map<std::string, ParameterValue>&)>;
@@ -54,7 +66,12 @@ public:
 
 public:
     /// 执行任务（带参数验证和类型检查）
-    auto execute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) const -> bool override;
+    auto doExecute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) -> bool;
+
+    auto execute(const std::string& command, const std::map<std::string, std::string>& inputParams,
+                 std::string& errorMsg) -> bool override;
+
+    auto validateCommon(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) -> bool override;
 
     auto getName() const -> const std::string&;
 
@@ -75,9 +92,13 @@ public:
 
     auto getTaskProgressBar() const -> TaskProgressBar::Ptr;
 
-    void setProgressCallback(ProgressCallback callback) const;
+    auto setProgressCallback(ProgressCallback callback) const -> void;
 
     auto getProgressCallback() const -> ProgressCallback;
+
+    auto setBuilder(const ICommandBuilder::Ptr& builder) -> XTask&;
+
+    auto builder() const -> ICommandBuilder::Ptr;
 
 public:
     auto setTitle(const std::string_view& name) -> void;

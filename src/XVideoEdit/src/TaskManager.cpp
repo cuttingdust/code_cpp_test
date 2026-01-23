@@ -244,8 +244,8 @@ auto TaskManager::createAndRegisterTask(const std::string_view& taskName, const 
     return task;
 }
 
-XTask& TaskManager::registerTask(const std::string_view& name, const XTask::TaskFunc& func,
-                                 const std::string_view& description)
+auto TaskManager::registerTask(const std::string_view& name, const XTask::TaskFunc& func,
+                               const std::string_view& description) -> XTask&
 {
     auto task = createSimpleTask(name, func, description);
     if (!task)
@@ -330,7 +330,7 @@ auto TaskManager::executeTask(const std::string_view& name, const std::map<std::
 
         impl_->statistics_.totalExecutions++;
 
-        bool success = task->execute(params, error);
+        bool success = task->doExecute(params, error);
 
         /// 更新统计信息
         impl_->updateStatistics(success);

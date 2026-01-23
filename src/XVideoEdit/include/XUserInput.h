@@ -53,6 +53,14 @@ public:
     auto registerTask(const std::string_view& name, const TaskFunc& func, const std::string_view& description = "")
             -> XTask&;
 
+    template <typename CommandType>
+    auto registerTask(const std::string_view& name, const TaskFunc& func, const std::string_view& description = "")
+            -> XTask&;
+
+    auto registerTask(const std::string_view& name, const std::string& typeName, const TaskFunc& func,
+                      const std::string_view& description = "") -> XTask&;
+
+    template <typename CommandType>
     auto registerTask(const std::string_view& name, const std::string& typeName, const TaskFunc& func,
                       const std::string_view& description = "") -> XTask&;
 
@@ -113,3 +121,17 @@ private:
     class PImpl;
     std::unique_ptr<PImpl> impl_;
 };
+
+template <typename CommandType>
+auto XUserInput::registerTask(const std::string_view& name, const TaskFunc& func, const std::string_view& description)
+        -> XTask&
+{
+    return registerTask(name, func, description).setBuilder(CommandType::create());
+}
+
+template <typename CommandType>
+auto XUserInput::registerTask(const std::string_view& name, const std::string& typeName, const TaskFunc& func,
+                              const std::string_view& description) -> XTask&
+{
+    return registerTask(name, typeName, func, description).setBuilder(CommandType::create());
+}

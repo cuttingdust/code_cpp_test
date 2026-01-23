@@ -3,6 +3,7 @@
 #include "ITask.h"
 #include "TaskProgressBar.h"
 
+#include <iostream>
 #include <stdexcept>
 #include <utility>
 
@@ -22,7 +23,9 @@ public:
     std::map<std::string, ParameterValue> parameterList_;
     mutable ProgressCallback              progressCallback_;
     TaskProgressBar::Ptr                  progressBar_ = nullptr;
+    ICommandBuilder::Ptr                  builder_     = nullptr;
 };
+
 
 XTask::PImpl::PImpl(XTask *owenr, const std::string_view &name, TaskFunc func, const std::string_view &desc) :
     owenr_(owenr), name_(name), func_(std::move(func)), description_(desc)
@@ -91,7 +94,7 @@ auto XTask::addDirectoryParam(const std::string_view &paramName, const std::stri
     return addParameter(paramName, Type::Directory, desc, required, completor);
 }
 
-auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::string &errorMsg) const -> bool
+auto XTask::doExecute(const std::map<std::string, std::string> &inputParams, std::string &errorMsg) -> bool
 {
     /// 1. 验证必需参数
     for (const auto &param : impl_->parameters_)
@@ -104,7 +107,7 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
     }
 
     /// 2. 类型检查和转换
-    impl_->parameterList_.clear(); // 清空之前的结果
+    impl_->parameterList_.clear(); /// 清空之前的结果
     for (const auto &[key, strValue] : inputParams)
     {
         /// 查找参数定义
@@ -149,7 +152,38 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
         }
     }
 
-    /// 3. 执行任务
+    /// 3. 公共验证（文件存在、路径等）
+    if (!validateCommon(inputParams, errorMsg))
+    {
+        return false;
+    }
+
+    /// 4. 构建任务命令（如果有构建器）
+    std::string command;
+    if (impl_->builder_)
+    {
+        ///  (1). 特定任务验证
+        if (!impl_->builder_->validate(inputParams, errorMsg))
+        {
+            return false;
+        }
+
+        /// (2). 设置任务标题
+        std::string title = impl_->builder_->getTitle(inputParams);
+        setTitle(title);
+
+        /// (3). 构建命令
+        command = impl_->builder_->build(inputParams);
+        std::cout << "执行命令: " << command << std::endl;
+    }
+
+    /// 4. 执行一些任务
+    if (!execute(command, inputParams, errorMsg))
+    {
+        return false;
+    }
+
+    /// 5. 执行任务
     try
     {
         impl_->func_(impl_->parameterList_);
@@ -161,6 +195,20 @@ auto XTask::execute(const std::map<std::string, std::string> &inputParams, std::
         return false;
     }
 }
+
+auto XTask::execute(const std::string &command, const std::map<std::string, std::string> &inputParams,
+                    std::string &errorMsg) -> bool
+{
+    return true;
+}
+
+auto XTask::validateCommon(const std::map<std::string, std::string> &inputParams, std::string &errorMsg) -> bool
+
+{
+    /// 目标是true，表示验证通过
+    return true;
+}
+
 auto XTask::getName() const -> const std::string &
 {
     return impl_->name_;
@@ -220,7 +268,7 @@ auto XTask::getTaskProgressBar() const -> TaskProgressBar::Ptr
     return impl_->progressBar_;
 }
 
-void XTask::setProgressCallback(ProgressCallback callback) const
+auto XTask::setProgressCallback(ProgressCallback callback) const -> void
 {
     impl_->progressCallback_ = std::move(callback);
 }
@@ -228,6 +276,17 @@ void XTask::setProgressCallback(ProgressCallback callback) const
 auto XTask::getProgressCallback() const -> ProgressCallback
 {
     return impl_->progressCallback_;
+}
+
+auto XTask::setBuilder(const ICommandBuilder::Ptr &builder) -> XTask &
+{
+    impl_->builder_ = builder;
+    return *this;
+}
+
+auto XTask::builder() const -> ICommandBuilder::Ptr
+{
+    return impl_->builder_;
 }
 
 auto XTask::setTitle(const std::string_view &name) -> void
