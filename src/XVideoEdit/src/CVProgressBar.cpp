@@ -15,7 +15,7 @@ public:
 
 CVProgressBar::PImpl::PImpl(CVProgressBar *owner)
 {
-    // 空的，因为功能都在基类
+    /// 空的，因为功能都在基类
 }
 
 CVProgressBar::CVProgressBar(const ProgressBarConfig::Ptr &config) :
