@@ -51,13 +51,10 @@ auto CVProgressBar::updateProgress(XExec &exec, const std::string_view &taskName
 
         /// 开始进度监控
         startProgressMonitoring(exec, progressState, srcPath, dstPath);
+    }
+}
 
-        /// 标记完成
-        markAsCompleted("转码完成 ✓");
-    }
-    else
-    {
-        /// 参数不完整，调用基类处理
-        AVProgressBar::updateProgress(exec, taskName, inputParams);
-    }
+auto CVProgressBar::markAsCompleted(const std::string_view &message) -> void
+{
+    TaskProgressBar::markAsCompleted("转码完成 ✓");
 }

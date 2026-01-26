@@ -6,6 +6,10 @@
 
 #include "CVProgressBar.h"
 #include "CutProgressBar.h"
+#include "DecryptCommandBuilder.h"
+#include "DecryptProgressBar.h"
+#include "EncryptCommandBuilder.h"
+#include "EncryptProgressBar.h"
 
 #include "XUserInput.h"
 
@@ -361,6 +365,7 @@ int main(int argc, char* argv[])
                                                                                         ".AVI", ".MOV", ".MKV",  ".WMV",
                                                                                         ".FLV", ".WEBM" };
                               std::vector<std::string>              suggestions;
+                              suggestions.reserve(videoExtensions.size());
                               for (const auto& ext : videoExtensions)
                               {
                                   suggestions.push_back("video" + ext);
@@ -648,6 +653,409 @@ int main(int argc, char* argv[])
                               return suggestions;
                           })
             .addBoolParam("--force", "强制分析非标准文件", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          });
+
+    /// 示例7：视频加密任务
+    user_input
+            .registerTask<EncryptCommandBuilder, EncryptProgressBar>(
+                    "encrypt", "av",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& msg)
+                    {
+                        std::cout << "[视频加密操作]" << std::endl;
+                        auto src = params.at("--input").asString();
+                        auto dst = params.at("--output").asString();
+
+                        std::string method =
+                                params.contains("--method") ? params.at("--method").asString() : "AES-128-CBC";
+
+                        std::cout << "  加密文件: " << src << " → " << dst << std::endl;
+                        std::cout << "  加密方法: " << method << std::endl;
+
+                        if (params.contains("--key"))
+                        {
+                            std::cout << "  使用自定义密钥" << std::endl;
+                        }
+                        else
+                        {
+                            std::cout << "  将自动生成加密密钥" << std::endl;
+                        }
+                    },
+                    "加密视频文件，保护视频内容")
+            .addFileParam("--input", "源视频文件路径", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见视频文件扩展名
+                              static const std::vector<std::string> videoExtensions = { ".mp4", ".avi", ".mov",  ".mkv",
+                                                                                        ".wmv", ".flv", ".webm", ".MP4",
+                                                                                        ".AVI", ".MOV", ".MKV",  ".WMV",
+                                                                                        ".FLV", ".WEBM" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& ext : videoExtensions)
+                              {
+                                  suggestions.push_back("video" + ext);
+                              }
+                              return suggestions;
+                          })
+            .addFileParam("--output", "输出文件路径", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见输出文件建议
+                              static const std::vector<std::string> outputSuggestions = {
+                                  "encrypted.mp4",     "secure_video.mp4", "protected.mp4",
+                                  "output/encrypted/", "secure/",          "protected/"
+                              };
+                              std::vector<std::string> suggestions;
+                              for (const auto& suggestion : outputSuggestions)
+                              {
+                                  if (suggestion.starts_with(partial))
+                                  {
+                                      suggestions.push_back(suggestion);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addStringParam(
+                    "--key", "加密密钥(十六进制，可选)", false,
+                    [](std::string_view partial) -> std::vector<std::string>
+                    {
+                        /// 提供密钥长度建议
+                        static const std::vector<std::string> keySuggestions = {
+                            "0123456789abcdef0123456789abcdef",                                /// 32 chars for AES-128
+                            "0123456789abcdef0123456789abcdef0123456789abcdef",                /// 48 chars for AES-192
+                            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" /// 64 chars for AES-256
+                        };
+                        std::vector<std::string> suggestions;
+                        for (const auto& key : keySuggestions)
+                        {
+                            if (key.starts_with(partial))
+                            {
+                                suggestions.push_back(key);
+                            }
+                        }
+                        return suggestions;
+                    })
+            .addStringParam("--iv", "初始化向量(十六进制，可选)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// IV通常是16字节（32个十六进制字符）
+                                static const std::vector<std::string> ivSuggestions = {
+                                    "000102030405060708090a0b0c0d0e0f", "fedcba9876543210fedcba9876543210",
+                                    "0123456789abcdef0123456789abcdef"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& iv : ivSuggestions)
+                                {
+                                    if (iv.starts_with(partial))
+                                    {
+                                        suggestions.push_back(iv);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addStringParam("--method", "加密方法", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 提供支持的加密方法
+                                static const std::vector<std::string> methodSuggestions = {
+                                    "AES-128-CBC", "AES-192-CBC", "AES-256-CBC", "AES-128-CTR", "AES-192-CTR",
+                                    "AES-256-CTR", "AES-128-GCM", "AES-192-GCM", "AES-256-GCM"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& method : methodSuggestions)
+                                {
+                                    if (method.starts_with(partial))
+                                    {
+                                        suggestions.push_back(method);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addBoolParam("--encrypt-video", "是否加密视频流", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--encrypt-audio", "是否加密音频流", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--hmac", "启用HMAC验证", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addStringParam("--hmac-key", "HMAC密钥(如果启用HMAC)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// HMAC密钥建议
+                                static const std::vector<std::string> hmacKeySuggestions = {
+                                    "0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& key : hmacKeySuggestions)
+                                {
+                                    if (key.starts_with(partial))
+                                    {
+                                        suggestions.push_back(key);
+                                    }
+                                }
+                                return suggestions;
+                            });
+
+
+    /// 示例8：视频解密任务
+    user_input
+            .registerTask<DecryptCommandBuilder, DecryptProgressBar>(
+                    "decrypt", "av",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& msg)
+                    {
+                        std::cout << "[视频解密操作]" << std::endl;
+                        auto src = params.at("--input").asString();
+                        auto dst = params.at("--output").asString();
+
+                        std::string method =
+                                params.contains("--method") ? params.at("--method").asString() : "AES-128-CBC";
+
+                        std::cout << "  解密文件: " << src << " → " << dst << std::endl;
+                        std::cout << "  解密方法: " << method << std::endl;
+
+                        if (params.contains("--key"))
+                        {
+                            std::cout << "  使用密钥解密" << std::endl;
+                        }
+                        else if (params.contains("--password"))
+                        {
+                            std::cout << "  使用密码解密" << std::endl;
+                        }
+                        else
+                        {
+                            std::cout << "  错误: 需要解密密钥或密码" << std::endl;
+                        }
+
+                        if (!msg.empty())
+                        {
+                            std::cout << "  解密信息: " << msg << std::endl;
+                        }
+                    },
+                    "解密视频文件，恢复原始内容")
+            .addFileParam("--input", "加密的视频文件", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见加密文件扩展名
+                              static const std::vector<std::string> encryptedSuggestions = {
+                                  "encrypted.mp4", "secure.mp4",    "protected.mp4", "encrypted.mov",
+                                  "secure.mov",    "protected.mov", "video_enc.mp4", "video_secure.mp4"
+                              };
+                              std::vector<std::string> suggestions;
+                              for (const auto& file : encryptedSuggestions)
+                              {
+                                  suggestions.push_back(file);
+                              }
+                              return suggestions;
+                          })
+            .addFileParam("--output", "解密输出文件", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见输出文件建议
+                              static const std::vector<std::string> outputSuggestions = {
+                                  "decrypted.mp4",     "original.mp4", "restored.mp4",
+                                  "output/decrypted/", "original/",    "restored/"
+                              };
+                              std::vector<std::string> suggestions;
+                              for (const auto& suggestion : outputSuggestions)
+                              {
+                                  if (suggestion.starts_with(partial))
+                                  {
+                                      suggestions.push_back(suggestion);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addStringParam("--key", "解密密钥(十六进制，必需)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 提供密钥长度建议
+                                static const std::vector<std::string> keySuggestions = {
+                                    "0123456789abcdef0123456789abcdef", /// 32 chars for AES-128
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& key : keySuggestions)
+                                {
+                                    if (key.starts_with(partial))
+                                    {
+                                        suggestions.push_back(key);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addStringParam("--password", "解密密码(文本)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 提供一些示例密码
+                                static const std::vector<std::string> passwordSuggestions = { "mypassword", "secret123",
+                                                                                              "video2024",
+                                                                                              "securepass" };
+                                std::vector<std::string>              suggestions;
+                                for (const auto& pass : passwordSuggestions)
+                                {
+                                    if (pass.starts_with(partial))
+                                    {
+                                        suggestions.push_back(pass);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addStringParam("--kid", "Key ID(十六进制，可选)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// KID通常是16字节（32个十六进制字符）
+                                static const std::vector<std::string> kidSuggestions = {
+                                    "000102030405060708090a0b0c0d0e0f", "fedcba9876543210fedcba9876543210"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& kid : kidSuggestions)
+                                {
+                                    if (kid.starts_with(partial))
+                                    {
+                                        suggestions.push_back(kid);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addStringParam("--iv", "初始化向量(十六进制，可选)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                static const std::vector<std::string> ivSuggestions = {
+                                    "000102030405060708090a0b0c0d0e0f", "0123456789abcdef0123456789abcdef"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& iv : ivSuggestions)
+                                {
+                                    if (iv.starts_with(partial))
+                                    {
+                                        suggestions.push_back(iv);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addStringParam("--method", "解密方法", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 提供支持的解密方法
+                                static const std::vector<std::string> methodSuggestions = {
+                                    "AES-128-CBC", "AES-256-CBC",  "AES-128-CTR",
+                                    "AES-256-CTR", "cenc-aes-ctr", "cenc-aes-cbc"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& method : methodSuggestions)
+                                {
+                                    if (method.starts_with(partial))
+                                    {
+                                        suggestions.push_back(method);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addBoolParam("--hmac", "启用HMAC验证", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addStringParam("--hmac-key", "HMAC密钥(如果启用HMAC)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                static const std::vector<std::string> hmacKeySuggestions = {
+                                    "0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& key : hmacKeySuggestions)
+                                {
+                                    if (key.starts_with(partial))
+                                    {
+                                        suggestions.push_back(key);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addBoolParam("--reencode", "解密后重新编码", false,
                           [](std::string_view partial) -> std::vector<std::string>
                           {
                               static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",

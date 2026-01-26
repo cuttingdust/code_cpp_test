@@ -20,6 +20,8 @@ public:
     auto updateProgress(XExec &exec, const std::string_view &taskName,
                         const std::map<std::string, ParameterValue> &inputParams) -> void override;
 
+    auto markAsCompleted(const std::string_view &message) -> void override;
+
 private:
     class PImpl;
     std::unique_ptr<PImpl> impl_;

@@ -23,10 +23,6 @@ public:
     auto runProgressLoop(XExec &exec, const std::shared_ptr<AVProgressState> &progressState,
                          const std::string_view &dstPath) -> void;
 
-    /// 解析剪切参数（供剪切任务使用）
-    auto parseCutParams(const std::map<std::string, ParameterValue> &params, double &startTime, double &clipDuration,
-                        std::string &timeRangeStr) const -> bool;
-
     /// 计算剩余时间
     auto calculateRemainingTime(double currentTime, double startTime, double totalDuration,
                                 const std::string &speed) const -> std::string;
@@ -149,45 +145,8 @@ auto AVProgressBar::PImpl::runProgressLoop(XExec &exec, const std::shared_ptr<AV
     auto endTimePoint = std::chrono::steady_clock::now();
     auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(endTimePoint - startTimePoint);
 
+    owner_->markAsCompleted();
     owner_->showCompletionInfo(dstPath, totalElapsed);
-}
-
-auto AVProgressBar::PImpl::parseCutParams(const std::map<std::string, ParameterValue> &params, double &startTime,
-                                          double &clipDuration, std::string &timeRangeStr) const -> bool
-{
-    /// 解析开始时间
-    startTime = 0.0;
-    if (params.contains("--start"))
-    {
-        startTime = owner_->parseTimeToSeconds(params.at("--start").asString());
-    }
-
-    /// 解析持续时间
-    clipDuration = 0.0;
-    if (params.contains("--duration"))
-    {
-        clipDuration = owner_->parseTimeToSeconds(params.at("--duration").asString());
-    }
-    else if (params.contains("--end"))
-    {
-        double endTime = owner_->parseTimeToSeconds(params.at("--end").asString());
-        clipDuration   = endTime - startTime;
-        if (clipDuration < 0)
-            clipDuration = 0;
-    }
-
-    /// 生成时间范围字符串
-    if (clipDuration > 0)
-    {
-        double endTime = startTime + clipDuration;
-        timeRangeStr   = owner_->formatTimeRange(startTime, endTime);
-    }
-    else
-    {
-        timeRangeStr = "从 " + owner_->secondsToTimeString(startTime) + " 开始";
-    }
-
-    return (clipDuration > 0);
 }
 
 auto AVProgressBar::PImpl::calculateRemainingTime(double currentTime, double startTime, double totalDuration,
@@ -235,7 +194,7 @@ auto AVProgressBar::PImpl::calculateRemainingTime(double currentTime, double sta
     return "";
 }
 
-// ==================== AVProgressBar 实现 ====================
+/// ==================== AVProgressBar 实现 ====================
 
 AVProgressBar::AVProgressBar(const ProgressBarConfig::Ptr &config) :
     TaskProgressBar(config), impl_(std::make_unique<PImpl>(this))
@@ -253,12 +212,14 @@ AVProgressBar::AVProgressBar(const std::string_view &configName) :
 
 AVProgressBar::~AVProgressBar() = default;
 
+
 auto AVProgressBar::updateProgress(XExec &exec, const std::string_view &taskName,
                                    const std::map<std::string, ParameterValue> &inputParams) -> void
 {
     /// 基类实现，子类应该重写
     TaskProgressBar::updateProgress(exec, taskName, inputParams);
 }
+
 
 auto AVProgressBar::startProgressMonitoring(XExec &exec, const std::shared_ptr<AVProgressState> &progressState,
                                             const std::string_view &srcPath, const std::string_view &dstPath) -> void

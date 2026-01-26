@@ -108,11 +108,6 @@ auto CutProgressBar::updateProgress(XExec &exec, const std::string_view &taskNam
         /// 开始进度监控
         startProgressMonitoring(exec, progressState, srcPath, dstPath);
     }
-    else
-    {
-        /// 参数不完整，调用基类处理
-        AVProgressBar::updateProgress(exec, taskName, inputParams);
-    }
 }
 
 auto CutProgressBar::markAsCompleted(const std::string_view &message) -> void

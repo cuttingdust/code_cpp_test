@@ -131,10 +131,10 @@ auto AVTask::validateCommon(const std::map<std::string, ParameterValue>& inputPa
     }
 
     /// 4. 检查是否为视频文件
-    if (!impl_->isVideoFile(srcPath, errorMsg))
-    {
-        return false;
-    }
+    // if (!impl_->isVideoFile(srcPath, errorMsg))
+    // {
+    //     return false;
+    // }
     return true;
 }
 
