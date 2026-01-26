@@ -1,25 +1,16 @@
 ﻿#pragma once
 
-#include "TaskProgressBar.h"
+#ifndef CUT_PROGRESS_BAR_H
+#define CUT_PROGRESS_BAR_H
+
+#include "AVProgressBar.h"
 
 class XExec;
 
-class CutProgressBar : public TaskProgressBar
+class CutProgressBar : public AVProgressBar
 {
     DECLARE_CREATE_DEFAULT(CutProgressBar)
 public:
-    struct ProgressState
-    {
-        std::mutex  mutex;
-        double      currentTime   = 0.0; /// 当前时间（秒）
-        double      clipDuration  = 0.0; /// 剪切片段时长（秒）
-        double      totalDuration = 0.0; /// 视频总时长（秒）
-        std::string displayTime;         /// 显示时间
-        std::string speed;               /// 处理速度
-        std::string timeRange;           /// 时间范围显示
-        bool        hasProgress = false;
-    };
-
     CutProgressBar(const ProgressBarConfig::Ptr &config = nullptr);
     CutProgressBar(ProgressBarStyle style);
     CutProgressBar(const std::string_view &configName);
@@ -43,3 +34,5 @@ private:
 };
 
 IMPLEMENT_CREATE_DEFAULT(CutProgressBar)
+
+#endif // CUT_PROGRESS_BAR_H
