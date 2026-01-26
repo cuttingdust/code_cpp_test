@@ -64,6 +64,10 @@ public:
     auto registerTask(const std::string_view& name, const std::string& typeName, const TaskFunc& func,
                       const std::string_view& description = "") -> XTask&;
 
+    template <typename CommandType, typename BarType>
+    auto registerTask(const std::string_view& name, const std::string& typeName, const TaskFunc& func,
+                      const std::string_view& description = "") -> XTask&;
+
 public:
     /// \brief 启动用户输入处理器
     ///
@@ -134,4 +138,13 @@ auto XUserInput::registerTask(const std::string_view& name, const std::string& t
                               const std::string_view& description) -> XTask&
 {
     return registerTask(name, typeName, func, description).setBuilder(CommandType::create());
+}
+
+template <typename CommandType, typename BarType>
+auto XUserInput::registerTask(const std::string_view& name, const std::string& typeName, const TaskFunc& func,
+                              const std::string_view& description) -> XTask&
+{
+    return registerTask(name, typeName, func, description)
+            .setBuilder(CommandType::create())
+            .setProgressBar(BarType::create(typeName));
 }

@@ -17,12 +17,6 @@ public:
 
     auto validatePaths(const std::string& srcPath, const std::string& dstPath, std::string& errorMsg) const -> bool;
 
-    auto buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath, const std::string& dstPath,
-                            const std::map<std::string, std::string>& params) const -> std::string;
-
-    auto executeFFmpegCommand(const std::string& command, const std::map<std::string, std::string>& inputParams,
-                              std::string& errorMsg) const -> bool;
-
 public:
     AVTask* owner_ = nullptr;
 };
@@ -75,146 +69,29 @@ auto AVTask::PImpl::validatePaths(const std::string& srcPath, const std::string&
         std::cout << "警告: 无法获取文件大小: " << e.what() << std::endl;
     }
 
-    /// 创建目标目录
-    fs::path dstFilePath(dstPath);
-    fs::path dstDir = dstFilePath.parent_path();
-
-    if (!dstDir.empty() && !fs::exists(dstDir))
+    if (!dstPath.empty())
     {
-        try
+        /// 创建目标目录
+        fs::path dstFilePath(dstPath);
+        fs::path dstDir = dstFilePath.parent_path();
+
+        if (!dstDir.empty() && !fs::exists(dstDir))
         {
-            fs::create_directories(dstDir);
-        }
-        catch (const fs::filesystem_error& e)
-        {
-            errorMsg = "无法创建目标目录: " + std::string(e.what());
-            return false;
+            try
+            {
+                fs::create_directories(dstDir);
+            }
+            catch (const fs::filesystem_error& e)
+            {
+                errorMsg = "无法创建目标目录: " + std::string(e.what());
+                return false;
+            }
         }
     }
 
     return true;
 }
 
-auto AVTask::PImpl::buildFFmpegCommand(const std::string& ffmpegPath, const std::string& srcPath,
-                                       const std::string&                        dstPath,
-                                       const std::map<std::string, std::string>& params) const -> std::string
-{
-    std::stringstream cmd;
-    cmd << "\"" << ffmpegPath << "\" -hide_banner -progress pipe:1 -nostats -loglevel error -y -i \"" << srcPath
-        << "\" ";
-
-    /// 视频参数
-    if (params.contains("video_codec"))
-    {
-        cmd << "-c:v " << params.at("video_codec") << " ";
-    }
-    else
-    {
-        cmd << "-c:v libx264 ";
-    }
-
-    if (params.contains("bitrate"))
-    {
-        cmd << "-b:v " << params.at("bitrate") << " ";
-    }
-    else
-    {
-        cmd << "-b:v 2000k ";
-    }
-
-    if (params.contains("resolution"))
-    {
-        cmd << "-s " << params.at("resolution") << " ";
-    }
-
-    if (params.contains("fps"))
-    {
-        cmd << "-r " << params.at("fps") << " ";
-    }
-
-    /// 音频参数
-    if (params.contains("audio_codec"))
-    {
-        cmd << "-c:a " << params.at("audio_codec") << " ";
-    }
-    else
-    {
-        cmd << "-c:a aac ";
-    }
-
-    if (params.contains("audio_bitrate"))
-    {
-        cmd << "-b:a " << params.at("audio_bitrate") << " ";
-    }
-
-    /// 其他参数
-    if (params.contains("preset"))
-    {
-        cmd << "-preset " << params.at("preset") << " ";
-    }
-
-    if (params.contains("crf"))
-    {
-        cmd << "-crf " << params.at("crf") << " ";
-    }
-
-    cmd << "\"" << dstPath << "\""; /// 将 stderr 重定向到 stdout
-
-    return cmd.str();
-}
-
-auto AVTask::PImpl::executeFFmpegCommand(const std::string&                        command,
-                                         const std::map<std::string, std::string>& inputParams,
-                                         std::string&                              errorMsg) const -> bool
-{
-    XExec exec;
-
-    std::string dstPath  = inputParams.at("--output");
-    std::string fileName = std::filesystem::path(dstPath).filename().string();
-    owner_->setTitle("转码: " + fileName);
-
-    /// 启动命令
-    if (!exec.start(command, true)) /// 合并 stderr 到 stdout
-    {
-        errorMsg = "启动FFmpeg命令失败";
-        return false;
-    }
-
-    /// 显示进度条（使用FFmpeg特定的进度监控）
-    owner_->updateProgress(exec, owner_->getName(), inputParams);
-
-    /// 等待完成
-    int  exitCode = exec.wait();
-    bool success  = (exitCode == 0);
-
-    /// 验证结果
-    if (success)
-    {
-        namespace fs = std::filesystem;
-        if (fs::exists(dstPath) && fs::file_size(dstPath) > 0)
-        {
-            return true;
-        }
-        else
-        {
-            errorMsg = "转码完成但输出文件无效";
-            return false;
-        }
-    }
-    else
-    {
-        errorMsg = "转码过程失败，退出码: " + std::to_string(exitCode);
-
-        /// 获取错误输出
-        std::string stderrOutput = exec.getOutError();
-        if (!stderrOutput.empty())
-        {
-            errorMsg += "\n错误信息: " + stderrOutput;
-        }
-
-        return false;
-    }
-}
 
 AVTask::AVTask()
 {
@@ -229,15 +106,22 @@ AVTask::AVTask(const std::string_view& name, const TaskFunc& func, const std::st
 
 AVTask::~AVTask() = default;
 
-auto AVTask::validateCommon(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) -> bool
+auto AVTask::validateCommon(const std::map<std::string, ParameterValue>& inputParams, std::string& errorMsg) -> bool
 {
     /// 2. 获取基本参数
-    std::string srcPath = getRequiredParam(inputParams, "--input", errorMsg);
-    std::string dstPath = getRequiredParam(inputParams, "--output", errorMsg);
-
-    if (srcPath.empty() || dstPath.empty())
+    std::string srcPath, dstPath;
+    srcPath = getRequiredParam(inputParams, "--input", errorMsg).asString();
+    if (srcPath.empty())
     {
         return false;
+    }
+    if (hasParameter("--output"))
+    {
+        dstPath = getRequiredParam(inputParams, "--output", errorMsg).asString();
+        if (srcPath.empty())
+        {
+            return false;
+        }
     }
 
     /// 3. 文件系统检查
@@ -254,14 +138,10 @@ auto AVTask::validateCommon(const std::map<std::string, std::string>& inputParam
     return true;
 }
 
-auto AVTask::execute(const std::string& command, const std::map<std::string, std::string>& inputParams,
-                     std::string& errorMsg) -> bool
+auto AVTask::execute(const std::string& command, const std::map<std::string, ParameterValue>& inputParams,
+                     std::string& errorMsg, std::string& resultMsg) -> bool
 {
     XExec exec;
-
-    std::string dstPath  = inputParams.at("--output");
-    std::string fileName = fs::path(dstPath).filename().string();
-    setTitle("处理: " + fileName);
 
     /// 启动命令
     if (!exec.start(command, true)) /// 合并 stderr 到 stdout
@@ -272,37 +152,13 @@ auto AVTask::execute(const std::string& command, const std::map<std::string, std
 
     /// 显示进度条（使用FFmpeg特定的进度监控）
     updateProgress(exec, getName(), inputParams);
-
-    /// 等待完成
-    int  exitCode = exec.wait();
-    bool success  = (exitCode == 0);
-
-    /// 验证结果
-    if (success)
+    if (!waitProgress(exec, inputParams, errorMsg))
     {
-        if (fs::exists(dstPath) && fs::file_size(dstPath) > 0)
-        {
-            return true;
-        }
-        else
-        {
-            errorMsg = "处理完成但输出文件无效";
-            return false;
-        }
-    }
-    else
-    {
-        errorMsg = "处理过程失败，退出码: " + std::to_string(exitCode);
-
-        /// 获取错误输出
-        std::string stderrOutput = exec.getOutError();
-        if (!stderrOutput.empty())
-        {
-            errorMsg += "\n错误信息: " + stderrOutput;
-        }
-
         return false;
     }
+    resultMsg = exec.getOutput();
+
+    return true;
 }
 
 

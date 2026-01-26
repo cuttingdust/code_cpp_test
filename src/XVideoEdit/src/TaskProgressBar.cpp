@@ -193,7 +193,7 @@ auto TaskProgressBar::setTitle(const std::string_view& title) const -> void
 }
 
 auto TaskProgressBar::updateProgress(XExec& exec, const std::string_view& taskName,
-                                     const std::map<std::string, std::string>& inputParams) -> void
+                                     const std::map<std::string, ParameterValue>& inputParams) -> void
 {
     impl_->showGenericImpl(exec, taskName);
 }

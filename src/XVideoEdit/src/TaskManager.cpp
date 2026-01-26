@@ -227,7 +227,7 @@ auto TaskManager::createAndRegisterTask(const std::string_view& taskName, const 
     {
         if (auto progressBar = config.progressBarCreator(taskName))
         {
-            task->setTaskProgressBar(progressBar);
+            task->setProgressBar(progressBar);
         }
     }
 

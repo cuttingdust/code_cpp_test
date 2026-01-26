@@ -1,6 +1,7 @@
 #pragma once
 
 #include "XConst.h"
+#include "ParameterValue.h"
 
 class ITask
 {
@@ -13,10 +14,13 @@ public:
 
     virtual ~ITask() = default;
 
-    virtual auto execute(const std::string& command, const std::map<std::string, std::string>& inputParams,
-                         std::string& errorMsg) -> bool = 0;
+    virtual auto execute(const std::string& command, const std::map<std::string, ParameterValue>& inputParams,
+                         std::string& errorMsg, std::string& resultMsg) -> bool = 0;
 
-    virtual auto validateCommon(const std::map<std::string, std::string>& inputParams, std::string& errorMsg)
+    virtual auto validateCommon(const std::map<std::string, ParameterValue>& inputParams, std::string& errorMsg)
+            -> bool = 0;
+
+    virtual auto validateSuccess(const std::map<std::string, ParameterValue>& inputParams, std::string& errorMsg)
             -> bool = 0;
 
     auto setTaskType(const TaskType& tt) -> void

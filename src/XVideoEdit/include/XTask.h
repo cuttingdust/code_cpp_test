@@ -18,15 +18,15 @@ public:
     public:
         virtual ~ICommandBuilder() = default;
         using Ptr                  = std::shared_ptr<ICommandBuilder>;
-        virtual auto build(const std::map<std::string, std::string>& params) const -> std::string = 0;
-        virtual auto validate(const std::map<std::string, std::string>& params, std::string& errorMsg) const
-                -> bool                                                                              = 0;
-        virtual auto getTitle(const std::map<std::string, std::string>& params) const -> std::string = 0;
+        virtual auto build(const std::map<std::string, ParameterValue>& params) const -> std::string = 0;
+        virtual auto validate(const std::map<std::string, ParameterValue>& params, std::string& errorMsg) const
+                -> bool                                                                                 = 0;
+        virtual auto getTitle(const std::map<std::string, ParameterValue>& params) const -> std::string = 0;
     };
     using SmartBuilder     = ICommandBuilder::Ptr;
     using List             = std::map<std::string, XTask::Ptr, std::less<>>;
     using Container        = std::vector<XTask::Ptr>;
-    using TaskFunc         = std::function<void(const std::map<std::string, ParameterValue>&)>;
+    using TaskFunc         = std::function<void(const std::map<std::string, ParameterValue>&, const std::string&)>;
     using ProgressCallback = std::function<void(float percent, const std::string& timeInfo)>;
     using Type             = Parameter::Type;
     using CompletionFunc   = Parameter::CompletionFunc;
@@ -68,10 +68,14 @@ public:
     /// 执行任务（带参数验证和类型检查）
     auto doExecute(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) -> bool;
 
-    auto execute(const std::string& command, const std::map<std::string, std::string>& inputParams,
-                 std::string& errorMsg) -> bool override;
+    auto execute(const std::string& command, const std::map<std::string, ParameterValue>& inputParams,
+                 std::string& errorMsg, std::string& resultMsg) -> bool override;
 
-    auto validateCommon(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) -> bool override;
+    auto validateCommon(const std::map<std::string, ParameterValue>& inputParams, std::string& errorMsg)
+            -> bool override;
+
+    auto validateSuccess(const std::map<std::string, ParameterValue>& inputParams, std::string& errorMsg)
+            -> bool override;
 
     auto getName() const -> const std::string&;
 
@@ -83,16 +87,16 @@ public:
 
     auto hasParameter(const std::string_view& parameter) const -> bool;
 
-    auto getRequiredParam(const std::map<std::string, std::string>& params, const std::string& key,
-                          std::string& errorMsg) const -> std::string;
+    auto getRequiredParam(const std::map<std::string, ParameterValue>& params, const std::string& key,
+                          std::string& errorMsg) const -> ParameterValue;
 
     auto getParameter(const std::string& key, std::string& errorMsg) const -> ParameterValue;
 
-    auto setTaskProgressBar(const TaskProgressBar::Ptr& bar) -> void;
+    auto setProgressBar(const TaskProgressBar::Ptr& bar) -> XTask&;
 
-    auto getTaskProgressBar() const -> TaskProgressBar::Ptr;
+    auto progressBar() const -> TaskProgressBar::Ptr;
 
-    auto setProgressCallback(ProgressCallback callback) const -> void;
+    auto setProgressCallback(ProgressCallback callback) -> XTask&;
 
     auto getProgressCallback() const -> ProgressCallback;
 
@@ -108,7 +112,10 @@ public:
     auto setDescription(const std::string_view& desc) const -> void;
 
     auto updateProgress(XExec& exec, const std::string_view& taskName,
-                        const std::map<std::string, std::string>& inputParams) -> void;
+                        const std::map<std::string, ParameterValue>& inputParams) -> void;
+
+    auto waitProgress(XExec& exec, const std::map<std::string, ParameterValue>& inputParams, std::string& errorMsg)
+            -> bool;
 
 private:
     class PImpl;

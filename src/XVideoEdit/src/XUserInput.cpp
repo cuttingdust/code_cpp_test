@@ -27,6 +27,7 @@ public:
     auto registerTask(const std::string_view& name, const XTask::TaskFunc& func, const std::string_view& description)
             -> XTask&;
 
+
     auto registerTask(const std::string_view& taskName, const std::string_view& typeName, const XTask::TaskFunc& func,
                       const std::string_view& description) -> XTask&;
 
@@ -478,6 +479,7 @@ auto XUserInput::PImpl::registerTask(const std::string_view& name, const XTask::
 {
     return taskManager_->registerTask(name, func, description);
 }
+
 
 auto XUserInput::PImpl::registerTask(const std::string_view& taskName, const std::string_view& typeName,
                                      const XTask::TaskFunc& func, const std::string_view& description) -> XTask&

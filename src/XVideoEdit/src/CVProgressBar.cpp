@@ -1,14 +1,16 @@
-﻿#include "AVProgressBar.h"
+﻿#include "CVProgressBar.h"
+
+#include "ParameterValue.h"
 #include "XFile.h"
 #include "XExec.h"
 
 #include <iostream>
 #include <regex>
 
-class AVProgressBar::PImpl
+class CVProgressBar::PImpl
 {
 public:
-    PImpl(AVProgressBar *owenr);
+    PImpl(CVProgressBar *owenr);
     ~PImpl() = default;
 
 public:
@@ -19,25 +21,20 @@ public:
     auto formatDuration(float seconds) const -> std::string;
 
 public:
-    AVProgressBar *owenr_ = nullptr;
+    CVProgressBar *owenr_ = nullptr;
 };
 
-AVProgressBar::PImpl::PImpl(AVProgressBar *owenr) : owenr_(owenr)
+CVProgressBar::PImpl::PImpl(CVProgressBar *owenr) : owenr_(owenr)
 {
 }
 
-auto AVProgressBar::PImpl::showWithFfmpegImpl(XExec &exec, const std::string_view &srcPath,
+auto CVProgressBar::PImpl::showWithFfmpegImpl(XExec &exec, const std::string_view &srcPath,
                                               const std::string_view &dstPath) -> void
 {
-    /// 设置进度条标题
-    std::string title = "转码: " + std::filesystem::path(srcPath).filename().string();
-    owenr_->setTitle(title);
-
     /// 获取视频总时长
     float totalDuration    = estimateTotalDuration(srcPath);
     bool  hasTotalDuration = (totalDuration > 0);
 
-    std::cout << "\n开始" << title << std::endl;
     if (hasTotalDuration)
     {
         std::cout << "视频总时长: " << formatDuration(totalDuration) << std::endl;
@@ -270,16 +267,16 @@ auto AVProgressBar::PImpl::showWithFfmpegImpl(XExec &exec, const std::string_vie
         }
         else
         {
-            // 没有进度信息，检查是否长时间没有更新
+            /// 没有进度信息，检查是否长时间没有更新
             auto timeSinceLastProgress = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressTime);
 
-            if (timeSinceLastProgress.count() > 2) // 超过2秒没有进度更新
+            if (timeSinceLastProgress.count() > 2) /// 超过2秒没有进度更新
             {
                 std::stringstream postfix;
                 postfix << "等待FFmpeg输出... 已运行 " << elapsed.count() << " 秒";
                 owenr_->setMessage(postfix.str());
 
-                // 轻微增加进度（避免卡住的感觉）
+                /// 轻微增加进度（避免卡住的感觉）
                 float newPercent = std::min(lastPercent + 0.05f, 99.0f);
                 if (newPercent > lastPercent)
                 {
@@ -296,15 +293,9 @@ auto AVProgressBar::PImpl::showWithFfmpegImpl(XExec &exec, const std::string_vie
 
     /// 完成
     owenr_->markAsCompleted("转码完成 ✓");
-
-
-    /// 显示统计信息
-    std::cout << "\n转码完成统计:" << std::endl;
-    std::cout << "- 总进度更新次数: " << progressCount << std::endl;
-    std::cout << "- 最终文件: " << std::filesystem::path(dstPath).filename().string() << std::endl;
 }
 
-auto AVProgressBar::PImpl::estimateTotalDuration(const std::string_view &srcPath) const -> float
+auto CVProgressBar::PImpl::estimateTotalDuration(const std::string_view &srcPath) const -> float
 {
     std::string ffprobeCmd = std::string(FFPROBE_PATH) +
             " -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"" +
@@ -336,7 +327,7 @@ auto AVProgressBar::PImpl::estimateTotalDuration(const std::string_view &srcPath
     return 0.0f;
 }
 
-auto AVProgressBar::PImpl::formatDuration(float seconds) const -> std::string
+auto CVProgressBar::PImpl::formatDuration(float seconds) const -> std::string
 {
     int totalSeconds = static_cast<int>(seconds);
     int hours        = totalSeconds / 3600;
@@ -357,39 +348,39 @@ auto AVProgressBar::PImpl::formatDuration(float seconds) const -> std::string
     return ss.str();
 }
 
-AVProgressBar::AVProgressBar(const ProgressBarConfig::Ptr &config) :
+CVProgressBar::CVProgressBar(const ProgressBarConfig::Ptr &config) :
     TaskProgressBar(config), impl_(std::make_unique<PImpl>(this))
 {
 }
 
-AVProgressBar::AVProgressBar(ProgressBarStyle style) : TaskProgressBar(style), impl_(std::make_unique<PImpl>(this))
+CVProgressBar::CVProgressBar(ProgressBarStyle style) : TaskProgressBar(style), impl_(std::make_unique<PImpl>(this))
 {
 }
 
-AVProgressBar::AVProgressBar(const std::string_view &configName) :
+CVProgressBar::CVProgressBar(const std::string_view &configName) :
     TaskProgressBar(configName), impl_(std::make_unique<PImpl>(this))
 {
 }
 
-AVProgressBar::~AVProgressBar() = default;
+CVProgressBar::~CVProgressBar() = default;
 
-auto AVProgressBar::updateProgress(XExec &exec, const std::string_view &taskName,
-                                   const std::map<std::string, std::string> &inputParams) -> void
+auto CVProgressBar::updateProgress(XExec &exec, const std::string_view &taskName,
+                                   const std::map<std::string, ParameterValue> &inputParams) -> void
 {
-    if (inputParams.contains("--input"))
+    if (inputParams.contains("--input") && inputParams.contains("--output"))
     {
-        auto srcPath = inputParams.at("--input");
-        auto dstPath = inputParams.at("--output");
+        auto srcPath = inputParams.at("--input").asString();
+        auto dstPath = inputParams.at("--output").asString();
         impl_->showWithFfmpegImpl(exec, srcPath, dstPath);
     }
 }
 
-auto AVProgressBar::markAsCompleted(const std::string_view &message) -> void
+auto CVProgressBar::markAsCompleted(const std::string_view &message) -> void
 {
     TaskProgressBar::markAsCompleted(message);
 }
 
-auto AVProgressBar::markAsFailed(const std::string_view &message) -> void
+auto CVProgressBar::markAsFailed(const std::string_view &message) -> void
 {
     TaskProgressBar::markAsFailed(message);
 }

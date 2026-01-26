@@ -10,9 +10,9 @@ class ConvertCommandBuilder : public AVTask::ICommandBuilder
     DECLARE_CREATE(ConvertCommandBuilder)
 
 public:
-    auto build(const std::map<std::string, std::string> &params) const -> std::string override;
-    auto validate(const std::map<std::string, std::string> &params, std::string &errorMsg) const -> bool override;
-    auto getTitle(const std::map<std::string, std::string> &params) const -> std::string override;
+    auto build(const std::map<std::string, ParameterValue> &params) const -> std::string override;
+    auto validate(const std::map<std::string, ParameterValue> &params, std::string &errorMsg) const -> bool override;
+    auto getTitle(const std::map<std::string, ParameterValue> &params) const -> std::string override;
 
 private:
     struct ConvertOptions
@@ -31,7 +31,7 @@ private:
         bool        overwrite = true;  /// 覆盖输出文件
     };
 
-    auto parseOptions(const std::map<std::string, std::string> &params) const -> ConvertOptions;
+    auto parseOptions(const std::map<std::string, ParameterValue> &params) const -> ConvertOptions;
     auto buildVideoFilters(const ConvertOptions &options) const -> std::string;
 };
 

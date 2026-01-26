@@ -5,14 +5,14 @@
 #include <algorithm>
 #include <cctype>
 
-auto ConvertCommandBuilder::parseOptions(const std::map<std::string, std::string>& params) const
+auto ConvertCommandBuilder::parseOptions(const std::map<std::string, ParameterValue>& params) const
         -> ConvertCommandBuilder::ConvertOptions
 {
     ConvertOptions options;
 
     /// 必需参数
-    options.input  = params.at("--input");
-    options.output = params.at("--output");
+    options.input  = params.at("--input").asString();
+    options.output = params.at("--output").asString();
 
     /// 可选参数
     if (params.contains("--video_codec"))
@@ -43,7 +43,7 @@ auto ConvertCommandBuilder::parseOptions(const std::map<std::string, std::string
     return options;
 }
 
-bool ConvertCommandBuilder::validate(const std::map<std::string, std::string>& params, std::string& errorMsg) const
+bool ConvertCommandBuilder::validate(const std::map<std::string, ParameterValue>& params, std::string& errorMsg) const
 {
     /// 检查必需参数
     if (!params.contains("--input") || params.at("--input").empty())
@@ -82,8 +82,8 @@ bool ConvertCommandBuilder::validate(const std::map<std::string, std::string>& p
         const std::string&                    codec       = params.at("--audio_codec");
         static const std::vector<std::string> validCodecs = { "aac", "mp3", "opus", "vorbis", "flac", "libopus" };
 
-        bool found = std::any_of(validCodecs.begin(), validCodecs.end(),
-                                 [&codec](const std::string& valid) { return codec.find(valid) != std::string::npos; });
+        bool found = std::ranges::any_of(validCodecs, [&codec](const std::string& valid)
+                                         { return codec.find(valid) != std::string::npos; });
 
         if (!found)
         {
@@ -140,7 +140,7 @@ auto ConvertCommandBuilder::buildVideoFilters(const ConvertOptions& options) con
     return filters.str();
 }
 
-auto ConvertCommandBuilder::build(const std::map<std::string, std::string>& params) const -> std::string
+auto ConvertCommandBuilder::build(const std::map<std::string, ParameterValue>& params) const -> std::string
 {
     ConvertOptions options = parseOptions(params);
 
@@ -205,7 +205,7 @@ auto ConvertCommandBuilder::build(const std::map<std::string, std::string>& para
     return cmd.str();
 }
 
-auto ConvertCommandBuilder::getTitle(const std::map<std::string, std::string>& params) const -> std::string
+auto ConvertCommandBuilder::getTitle(const std::map<std::string, ParameterValue>& params) const -> std::string
 {
     std::string input  = params.at("--input");
     std::string output = params.at("--output");

@@ -206,7 +206,7 @@ auto VideoFileValidator::isVideoFileByFFmpeg(const std::string& filePath, std::s
 {
     try
     {
-        std::string command = XTool::getFFProbePath() +
+        std::string command = XTool::getFFprobePath() +
                 " -v error -select_streams v:0 -show_entries stream=codec_type "
                 "-of default=noprint_wrappers=1:nokey=1 \"" +
                 filePath + "\"";

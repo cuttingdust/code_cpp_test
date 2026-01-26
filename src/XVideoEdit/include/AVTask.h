@@ -11,10 +11,12 @@ public:
     ~AVTask() override;
 
 public:
-    auto validateCommon(const std::map<std::string, std::string>& inputParams, std::string& errorMsg) -> bool override;
+    auto validateCommon(const std::map<std::string, ParameterValue>& inputParams, std::string& errorMsg)
+            -> bool override;
 
-    auto execute(const std::string& command, const std::map<std::string, std::string>& inputParams,
-                 std::string& errorMsg) -> bool override;
+    auto execute(const std::string& command, const std::map<std::string, ParameterValue>& inputParams,
+                 std::string& errorMsg, std::string& resultMsg) -> bool override;
+
 
 private:
     class PImpl;

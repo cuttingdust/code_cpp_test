@@ -1,7 +1,11 @@
-#include "AVProgressBar.h"
 #include "ConvertCommandBuilder.h"
+#include "CutCommandBuilder.h"
+#include "AnalyzeCommandBuilder.h"
 
 #include "AVTask.h"
+
+#include "CVProgressBar.h"
+#include "CutProgressBar.h"
 
 #include "XUserInput.h"
 
@@ -18,13 +22,13 @@ int main(int argc, char* argv[])
     user_input.setOnCommandComplete([](const std::string_view& cmd) { std::cout << "命令执行完成\n"; });
     user_input.setOnError([](const std::string_view& error) { std::cerr << "执行出错: " << error << "\n"; });
 
-    user_input.getTaskManager().registerType<AVTask, AVProgressBar>("av", "音视频处理任务");
+    user_input.getTaskManager().registerType<AVTask, CVProgressBar>("av", "音视频处理任务");
 
     /// 示例1：支持类型的copy任务
     user_input
             .registerTask(
                     "copy",
-                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& msg)
                     {
                         std::cout << "[复制操作]" << std::endl;
                         auto src = params.at("-s").asString();
@@ -59,7 +63,7 @@ int main(int argc, char* argv[])
     user_input
             .registerTask(
                     "calculate",
-                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& msg)
                     {
                         std::cout << "[计算操作]" << std::endl;
                         double x       = params.at("-x").asDouble();
@@ -126,7 +130,7 @@ int main(int argc, char* argv[])
     user_input
             .registerTask(
                     "start",
-                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& result)
                     {
                         std::cout << "[启动服务器]" << std::endl;
                         std::string host  = params.at("-host").asString();
@@ -211,7 +215,7 @@ int main(int argc, char* argv[])
     user_input
             .registerTask(
                     "echo",
-                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& result)
                     {
                         if (params.contains("-m"))
                         {
@@ -244,7 +248,7 @@ int main(int argc, char* argv[])
     user_input
             .registerTask<ConvertCommandBuilder>(
                     "cv", "av",
-                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& result)
                     {
                         std::cout << "[转码操作]" << std::endl;
                         auto src = params.at("--input").asString();
@@ -297,9 +301,9 @@ int main(int argc, char* argv[])
                           });
 
     user_input
-            .registerTask(
+            .registerTask<CutCommandBuilder, CutProgressBar>(
                     "cut", "av",
-                    [](const std::map<std::string, XUserInput::ParameterValue>& params)
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& result)
                     {
                         std::cout << "[剪切视频操作]" << std::endl;
                         auto src = params.at("--input").asString();
@@ -464,6 +468,190 @@ int main(int argc, char* argv[])
                           {
                               static const std::vector<std::string> boolValues = { "true", "false", "1",
                                                                                    "0",    "yes",   "no" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          });
+
+    /// 示例6：分析视频信息任务
+    user_input
+            .registerTask<AnalyzeCommandBuilder>(
+                    "analyze", "av",
+                    [](const std::map<std::string, XUserInput::ParameterValue>& params, const std::string& msg)
+                    {
+                        std::cout << "[分析视频信息操作]" << std::endl;
+                        auto src         = params.at("--input").asString();
+                        bool json_output = params.contains("--json") ? params.at("--json").asBool() : false;
+
+                        std::cout << "  分析文件: " << src << std::endl;
+                        std::cout << "  输出格式: " << (json_output ? "JSON" : "默认") << std::endl;
+
+                        if (params.contains("--show-frames") && params.at("--show-frames").asBool())
+                        {
+                            std::cout << "  显示帧信息: 是" << std::endl;
+                        }
+
+                        if (params.contains("--pretty") && json_output)
+                        {
+                            std::cout << "  美化JSON输出: 是" << std::endl;
+                        }
+
+                        std::cout << msg << std::endl;
+                    },
+                    "分析视频/音频文件信息")
+            .addFileParam("--input", "源文件路径", true,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见媒体文件扩展名
+                              static const std::vector<std::string> mediaExtensions = { ".mp4", ".avi", ".mov",  ".mkv",
+                                                                                        ".wmv", ".flv", ".webm", ".mp3",
+                                                                                        ".wav", ".aac", ".flac", ".ogg",
+                                                                                        ".m4a" };
+                              std::vector<std::string>              suggestions;
+                              suggestions.reserve(mediaExtensions.size());
+                              for (const auto& ext : mediaExtensions)
+                              {
+                                  suggestions.push_back("media" + ext);
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--json", "以JSON格式输出", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--show-format", "显示容器格式信息", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--show-streams", "显示流信息", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--show-frames", "显示帧信息（详细模式）", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addStringParam("--select-streams", "选择特定流（如v:0,a:0）", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                static const std::vector<std::string> streamSuggestions = { "v:0", "a:0", "v:0,a:0",
+                                                                                            "a",   "v",   "s" };
+                                std::vector<std::string>              suggestions;
+                                for (const auto& stream : streamSuggestions)
+                                {
+                                    if (stream.starts_with(partial))
+                                    {
+                                        suggestions.push_back(stream);
+                                    }
+                                }
+                                return suggestions;
+                            })
+            .addBoolParam("--count-frames", "计算帧数", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--count-packets", "计算包数", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--pretty", "美化JSON输出（需要python）", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--force", "强制分析非标准文件", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
                               std::vector<std::string>              suggestions;
                               for (const auto& value : boolValues)
                               {

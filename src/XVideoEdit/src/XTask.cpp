@@ -1,10 +1,9 @@
 ﻿#include "XTask.h"
+#include "XExec.h"
 
-#include "ITask.h"
 #include "TaskProgressBar.h"
 
 #include <iostream>
-#include <stdexcept>
 #include <utility>
 
 
@@ -153,32 +152,33 @@ auto XTask::doExecute(const std::map<std::string, std::string> &inputParams, std
     }
 
     /// 3. 公共验证（文件存在、路径等）
-    if (!validateCommon(inputParams, errorMsg))
+    if (!validateCommon(impl_->parameterList_, errorMsg))
     {
         return false;
     }
 
     /// 4. 构建任务命令（如果有构建器）
-    std::string command;
+    std::string command, result;
     if (impl_->builder_)
     {
         ///  (1). 特定任务验证
-        if (!impl_->builder_->validate(inputParams, errorMsg))
+        if (!impl_->builder_->validate(impl_->parameterList_, errorMsg))
         {
             return false;
         }
 
         /// (2). 设置任务标题
-        std::string title = impl_->builder_->getTitle(inputParams);
+        std::string title = impl_->builder_->getTitle(impl_->parameterList_);
         setTitle(title);
 
         /// (3). 构建命令
-        command = impl_->builder_->build(inputParams);
+        command = impl_->builder_->build(impl_->parameterList_);
         std::cout << "执行命令: " << command << std::endl;
     }
 
+
     /// 4. 执行一些任务
-    if (!execute(command, inputParams, errorMsg))
+    if (!execute(command, impl_->parameterList_, errorMsg, result))
     {
         return false;
     }
@@ -186,7 +186,7 @@ auto XTask::doExecute(const std::map<std::string, std::string> &inputParams, std
     /// 5. 执行任务
     try
     {
-        impl_->func_(impl_->parameterList_);
+        impl_->func_(impl_->parameterList_, result);
         return true;
     }
     catch (const std::exception &e)
@@ -196,14 +196,21 @@ auto XTask::doExecute(const std::map<std::string, std::string> &inputParams, std
     }
 }
 
-auto XTask::execute(const std::string &command, const std::map<std::string, std::string> &inputParams,
-                    std::string &errorMsg) -> bool
+auto XTask::execute(const std::string &command, const std::map<std::string, ParameterValue> &inputParams,
+                    std::string &errorMsg, std::string &resultMsg) -> bool
 {
     return true;
 }
 
-auto XTask::validateCommon(const std::map<std::string, std::string> &inputParams, std::string &errorMsg) -> bool
 
+auto XTask::validateCommon(const std::map<std::string, ParameterValue> &inputParams, std::string &errorMsg) -> bool
+
+{
+    /// 目标是true，表示验证通过
+    return true;
+}
+
+auto XTask::validateSuccess(const std::map<std::string, ParameterValue> &inputParams, std::string &errorMsg) -> bool
 {
     /// 目标是true，表示验证通过
     return true;
@@ -235,8 +242,8 @@ auto XTask::hasParameter(const std::string_view &parameter) const -> bool
     return std::ranges::find(impl_->parameters_, parameter) != impl_->parameters_.end();
 }
 
-auto XTask::getRequiredParam(const std::map<std::string, std::string> &params, const std::string &key,
-                             std::string &errorMsg) const -> std::string
+auto XTask::getRequiredParam(const std::map<std::string, ParameterValue> &params, const std::string &key,
+                             std::string &errorMsg) const -> ParameterValue
 {
     auto it = params.find(key);
     if (it == params.end())
@@ -258,19 +265,21 @@ auto XTask::getParameter(const std::string &key, std::string &errorMsg) const ->
     return it->second;
 }
 
-auto XTask::setTaskProgressBar(const TaskProgressBar::Ptr &bar) -> void
+auto XTask::setProgressBar(const TaskProgressBar::Ptr &bar) -> XTask &
 {
     impl_->progressBar_ = bar;
+    return *this;
 }
 
-auto XTask::getTaskProgressBar() const -> TaskProgressBar::Ptr
+auto XTask::progressBar() const -> TaskProgressBar::Ptr
 {
     return impl_->progressBar_;
 }
 
-auto XTask::setProgressCallback(ProgressCallback callback) const -> void
+auto XTask::setProgressCallback(ProgressCallback callback) -> XTask &
 {
     impl_->progressCallback_ = std::move(callback);
+    return *this;
 }
 
 auto XTask::getProgressCallback() const -> ProgressCallback
@@ -308,12 +317,28 @@ auto XTask::setDescription(const std::string_view &desc) const -> void
 }
 
 auto XTask::updateProgress(XExec &exec, const std::string_view &taskName,
-                           const std::map<std::string, std::string> &inputParams) -> void
+                           const std::map<std::string, ParameterValue> &inputParams) -> void
 {
     if (impl_->progressBar_)
     {
         impl_->progressBar_->updateProgress(exec, taskName, inputParams);
     }
+}
+
+auto XTask::waitProgress(XExec &exec, const std::map<std::string, ParameterValue> &inputParams, std::string &errorMsg)
+        -> bool
+{
+    bool success = true;
+    if (impl_->progressBar_)
+    {
+        /// 等待完成
+        success = (exec.wait() == 0);
+        if (success)
+        {
+            return validateSuccess(inputParams, errorMsg);
+        }
+    }
+    return success;
 }
 
 

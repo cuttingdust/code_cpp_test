@@ -1,8 +1,7 @@
 ﻿#pragma once
-#include "XConst.h"
 #include "ProgressBarConfig.h"
-
-#include <mutex>
+#include "ParameterValue.h"
+#include "XConst.h"
 
 class XExec;
 
@@ -29,7 +28,7 @@ public:
 
     /// 显示进度条并监控FFmpeg进度
     virtual auto updateProgress(XExec& exec, const std::string_view& taskName,
-                                const std::map<std::string, std::string>& inputParams) -> void;
+                                const std::map<std::string, ParameterValue>& inputParams) -> void;
 
     /// 手动更新进度
     virtual auto setProgress(float percent = 0.0f, const std::string& message = "") -> void;

@@ -16,7 +16,7 @@ public:
 
     static auto getFFmpegPath() -> std::string;
 
-    static auto getFFProbePath() -> std::string;
+    static auto getFFprobePath() -> std::string;
 
     static auto getFFPlayPath() -> std::string;
 };

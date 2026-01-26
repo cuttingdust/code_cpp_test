@@ -102,7 +102,7 @@ auto XTool::getFFmpegPath() -> std::string
 #endif
 }
 
-auto XTool::getFFProbePath() -> std::string
+auto XTool::getFFprobePath() -> std::string
 {
 #ifdef FFPROBE_PATH
     return FFPROBE_PATH;
