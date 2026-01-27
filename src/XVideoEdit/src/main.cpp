@@ -692,6 +692,15 @@ int main(int argc, char* argv[])
                         {
                             std::cout << "  将自动生成加密密钥" << std::endl;
                         }
+
+                        if (params.contains("--keyfile"))
+                        {
+                            std::cout << "  密钥将保存到: " << params.at("--keyfile").asString() << std::endl;
+                        }
+                        else
+                        {
+                            std::cout << "  注意: 未指定密钥文件，请务必记录生成的密钥！" << std::endl;
+                        }
                     },
                     "加密视频文件，保护视频内容")
             .addFileParam("--input", "源视频文件路径", true,
@@ -759,6 +768,30 @@ int main(int argc, char* argv[])
                         }
                         return suggestions;
                     })
+            .addFileParam("--keyfile", "密钥保存文件路径(可选)", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见密钥文件建议
+                              static const std::vector<std::string> keyfileSuggestions = {
+                                  "video_key.txt", "encryption_key.txt", "secure_key.txt",
+                                  "keys/",         "keyfiles/",          "encryption_keys/"
+                              };
+                              std::vector<std::string> suggestions;
+                              for (const auto& suggestion : keyfileSuggestions)
+                              {
+                                  if (suggestion.starts_with(partial))
+                                  {
+                                      suggestions.push_back(suggestion);
+                                  }
+                              }
+                              return suggestions;
+                          })
             .addStringParam("--iv", "初始化向量(十六进制，可选)", false,
                             [](std::string_view partial) -> std::vector<std::string>
                             {
@@ -873,14 +906,19 @@ int main(int argc, char* argv[])
                         std::string method =
                                 params.contains("--method") ? params.at("--method").asString() : "AES-128-CBC";
 
-                        std::cout << "  输入文件: " << src << std::endl;
-                        std::cout << "  输出文件: " << dst << std::endl;
+
+                        std::cout << "  解密文件: " << src << " → " << dst << std::endl;
                         std::cout << "  解密方法: " << method << std::endl;
 
-                        if (params.contains("--key"))
+
+                        if (params.contains("--keyfile"))
+                        {
+                            std::cout << "  从密钥文件读取参数: " << params.at("--keyfile").asString() << std::endl;
+                        }
+                        else if (params.contains("--key"))
                         {
                             std::string key = params.at("--key").asString();
-                            std::cout << "  使用密钥解密" << std::endl;
+                            std::cout << "  使用命令行密钥" << std::endl;
                             std::cout << "  密钥长度: " << key.length() << " 字符" << std::endl;
                         }
                         else if (params.contains("--password"))
@@ -889,7 +927,7 @@ int main(int argc, char* argv[])
                         }
                         else
                         {
-                            std::cout << "  错误: 需要解密密钥或密码" << std::endl;
+                            std::cout << "  错误: 需要解密密钥、密码或密钥文件" << std::endl;
                         }
 
                         /// 显示播放相关信息
@@ -1180,7 +1218,31 @@ int main(int argc, char* argv[])
                                     }
                                 }
                                 return suggestions;
-                            });
+                            })
+            .addFileParam("--keyfile", "从密钥文件读取参数(可选)", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              /// 如果是路径，返回空让路径补全处理
+                              if (partial.find('/') != std::string::npos || partial.find('\\') != std::string::npos ||
+                                  partial.find('.') != std::string::npos)
+                              {
+                                  return {};
+                              }
+                              /// 否则提供常见密钥文件建议
+                              static const std::vector<std::string> keyfileSuggestions = {
+                                  "video_key.txt", "encryption_key.txt", "secure_key.txt", "key.txt",
+                                  "keys/",         "keyfiles/"
+                              };
+                              std::vector<std::string> suggestions;
+                              for (const auto& suggestion : keyfileSuggestions)
+                              {
+                                  if (suggestion.starts_with(partial))
+                                  {
+                                      suggestions.push_back(suggestion);
+                                  }
+                              }
+                              return suggestions;
+                          });
 
 
     /// 注册自定义命令

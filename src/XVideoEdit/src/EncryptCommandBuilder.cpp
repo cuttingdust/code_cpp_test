@@ -8,6 +8,8 @@
 #include <random>
 #include <regex>
 #include <ranges>
+#include <fstream>
+#include <iomanip>
 
 /// 支持的加密算法（更新为FFmpeg实际支持的）
 const std::vector<std::string> EncryptCommandBuilder::SUPPORTED_CIPHERS = {
@@ -16,6 +18,120 @@ const std::vector<std::string> EncryptCommandBuilder::SUPPORTED_CIPHERS = {
     "aes-128-cbc",  /// 用于OpenSSL加密（如果可用）
     "aes-256-cbc"   /// 用于OpenSSL加密（如果可用）
 };
+
+auto EncryptCommandBuilder::cleanHexString(const std::string& str) const -> std::string
+{
+    std::string result;
+
+    /// 移除0x前缀
+    std::string temp = str;
+    if (temp.length() > 2 && (temp.starts_with("0x") || temp.starts_with("0X")))
+    {
+        temp = temp.substr(2);
+    }
+
+    /// 移除所有非十六进制字符
+    std::regex hexRegex(R"([^0-9a-fA-F])");
+    result = std::regex_replace(temp, hexRegex, "");
+
+    /// 转换为小写
+    std::ranges::transform(result, result.begin(), ::tolower);
+
+    return result;
+}
+
+auto EncryptCommandBuilder::validateKeyFormat(const std::string& key, const std::string& keyName,
+                                              std::string& errorMsg) const -> bool
+{
+    if (key.empty())
+    {
+        errorMsg = keyName + "不能为空";
+        return false;
+    }
+
+    /// 检查是否为有效的hex字符串
+    static std::regex hexRegex(R"(^[0-9a-fA-F]+$)");
+    if (!std::regex_match(key, hexRegex))
+    {
+        errorMsg = keyName + "必须是十六进制字符串（只包含0-9, a-f, A-F）";
+        return false;
+    }
+
+    /// 对于AES加密，需要特定长度
+    if (key.length() < 32) /// 16字节 = 32 hex字符
+    {
+        errorMsg = keyName + "长度不足: 需要至少 32 个十六进制字符 (16字节)，当前长度: " + std::to_string(key.length());
+        return false;
+    }
+
+    return true;
+}
+
+auto EncryptCommandBuilder::generateKeyFileName(const std::string& outputFile) const -> std::string
+{
+    std::filesystem::path outputPath(outputFile);
+    std::string           baseName = outputPath.stem().string();
+
+    /// 移除可能的后缀
+    size_t pos = baseName.find("_encrypted");
+    if (pos != std::string::npos)
+    {
+        baseName = baseName.substr(0, pos);
+    }
+
+    /// 生成密钥文件名
+    std::string           keyFileName = baseName + "_key.txt";
+    std::filesystem::path keyFilePath = outputPath.parent_path() / keyFileName;
+
+    return keyFilePath.string();
+}
+
+auto EncryptCommandBuilder::saveKeyToFile(const std::string& key, const std::string& kid, const std::string& method,
+                                          const std::string& keyfile) const -> bool
+{
+    try
+    {
+        std::ofstream keyFile(keyfile);
+        if (!keyFile.is_open())
+        {
+            std::cerr << "警告: 无法创建密钥文件: " << keyfile << std::endl;
+            return false;
+        }
+
+        /// 获取当前时间
+        auto    now  = std::chrono::system_clock::now();
+        auto    time = std::chrono::system_clock::to_time_t(now);
+        std::tm tm   = *std::localtime(&time);
+
+        keyFile << "=== 视频加密密钥信息 ===" << std::endl;
+        keyFile << "生成时间: " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << std::endl;
+        keyFile << "加密方法: " << method << std::endl;
+        keyFile << std::endl;
+        keyFile << "=== 解密所需参数 ===" << std::endl;
+        keyFile << "解密密钥 (--key): " << key << std::endl;
+        keyFile << "Key ID (--kid): " << kid << std::endl;
+        keyFile << std::endl;
+        keyFile << "=== 解密命令示例 ===" << std::endl;
+        keyFile << "task decrypt --input encrypted_video.mp4 --output decrypted.mp4 \\" << std::endl;
+        keyFile << "  --key " << key << " \\" << std::endl;
+        keyFile << "  --kid " << kid << " \\" << std::endl;
+        keyFile << "  --method " << method << std::endl;
+        keyFile << std::endl;
+        keyFile << "=== 重要提醒 ===" << std::endl;
+        keyFile << "1. 请妥善保管此文件，丢失密钥将无法解密视频" << std::endl;
+        keyFile << "2. 不要将此文件与加密视频放在同一目录" << std::endl;
+        keyFile << "3. 建议将此文件加密或存储在安全的地方" << std::endl;
+        keyFile << "======================================" << std::endl;
+
+        keyFile.close();
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "警告: 保存密钥文件失败: " << e.what() << std::endl;
+        return false;
+    }
+}
 
 auto EncryptCommandBuilder::parseOptions(const std::map<std::string, ParameterValue>& params) const
         -> EncryptCommandBuilder::EncryptOptions
@@ -37,10 +153,22 @@ auto EncryptCommandBuilder::parseOptions(const std::map<std::string, ParameterVa
         options.key = generateRandomKey(16);
     }
 
+    /// Key ID (KID)
+    if (params.contains("--kid"))
+    {
+        options.kid = params.at("--kid").asString();
+    }
+
     /// 初始化向量
     if (params.contains("--iv"))
     {
         options.iv = params.at("--iv").asString();
+    }
+
+    /// 密钥文件路径
+    if (params.contains("--keyfile"))
+    {
+        options.keyfile = params.at("--keyfile").asString();
     }
 
     /// 加密方法 - 默认为FFmpeg支持的cenc-aes-ctr
@@ -168,20 +296,11 @@ auto EncryptCommandBuilder::validate(const std::map<std::string, ParameterValue>
     {
         const std::string& key = params.at("--key").asString();
 
-        /// 检查是否为有效的hex字符串
-        static std::regex hexRegex(R"(^[0-9a-fA-F]+$)");
-        if (!std::regex_match(key, hexRegex))
-        {
-            errorMsg = "密钥必须是十六进制字符串";
-            return false;
-        }
+        /// 清理密钥字符串
+        std::string cleanKey = cleanHexString(key);
 
-        /// 对于cenc-aes-ctr，需要16字节（32 hex字符）
-        size_t minKeyLen = 32; /// 16字节 = 32 hex字符
-
-        if (key.length() < minKeyLen)
+        if (!validateKeyFormat(cleanKey, "加密密钥", errorMsg))
         {
-            errorMsg = "密钥长度不足: 需要至少 " + std::to_string(minKeyLen) + " 个十六进制字符 (16字节)";
             return false;
         }
     }
@@ -189,20 +308,53 @@ auto EncryptCommandBuilder::validate(const std::map<std::string, ParameterValue>
     /// 验证IV格式（如果提供） - 对于cenc-aes-ctr，IV是可选的
     if (params.contains("--iv"))
     {
-        const std::string& iv = params.at("--iv").asString();
+        const std::string& iv      = params.at("--iv").asString();
+        std::string        cleanIV = cleanHexString(iv);
 
-        /// 检查是否为有效的hex字符串
-        static std::regex hexRegex(R"(^[0-9a-fA-F]+$)");
-        if (!std::regex_match(iv, hexRegex))
+        if (!validateKeyFormat(cleanIV, "初始化向量(IV)", errorMsg))
         {
-            errorMsg = "IV必须是十六进制字符串";
             return false;
         }
+    }
 
-        /// IV通常是16字节（32 hex字符）
-        if (iv.length() < 32)
+    /// 验证KID格式（如果提供）
+    if (params.contains("--kid"))
+    {
+        const std::string& kid      = params.at("--kid").asString();
+        std::string        cleanKID = cleanHexString(kid);
+
+        if (!validateKeyFormat(cleanKID, "Key ID(KID)", errorMsg))
         {
-            errorMsg = "IV长度不足: 需要至少 32 个十六进制字符 (16字节)";
+            return false;
+        }
+    }
+
+    /// 验证密钥文件路径（如果提供）
+    if (params.contains("--keyfile"))
+    {
+        const std::string& keyfile = params.at("--keyfile").asString();
+
+        try
+        {
+            // 检查父目录是否存在
+            std::filesystem::path keyPath(keyfile);
+            auto                  parentPath = keyPath.parent_path();
+
+            if (!parentPath.empty() && !std::filesystem::exists(parentPath))
+            {
+                errorMsg = "密钥文件目录不存在: " + parentPath.string();
+                return false;
+            }
+
+            // 检查是否已存在同名文件（非必需，但给出警告）
+            if (std::filesystem::exists(keyfile))
+            {
+                std::cout << "警告: 密钥文件已存在，将被覆盖: " << keyfile << std::endl;
+            }
+        }
+        catch (const std::filesystem::filesystem_error& e)
+        {
+            errorMsg = "密钥文件路径无效: " + std::string(e.what());
             return false;
         }
     }
@@ -213,27 +365,22 @@ auto EncryptCommandBuilder::validate(const std::map<std::string, ParameterValue>
     return true;
 }
 
-
 auto EncryptCommandBuilder::build(const std::map<std::string, ParameterValue>& params) const -> std::string
 {
     EncryptOptions options = parseOptions(params);
 
     /// 清理和准备参数
-    std::string key = options.key;
+    std::string key = cleanHexString(options.key);
     std::string kid;
+    std::string iv;
 
-    /// 移除0x前缀（如果存在）
-    auto remove0x = [](std::string& str)
+    /// 如果提供了IV，也清理
+    if (!options.iv.empty())
     {
-        if (str.length() > 2 && (str.starts_with("0x") || str.starts_with("0X")))
-        {
-            str = str.substr(2);
-        }
-    };
+        iv = cleanHexString(options.iv);
+    }
 
-    remove0x(key);
-
-    /// 验证密钥格式
+    /// 验证密钥格式，如果无效则重新生成
     static std::regex hexRegex(R"(^[0-9a-fA-F]+$)");
     if (!std::regex_match(key, hexRegex) || key.length() < 32)
     {
@@ -252,10 +399,9 @@ auto EncryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
     }
 
     /// 准备KID（Key ID）
-    if (!options.iv.empty())
+    if (!options.kid.empty())
     {
-        kid = options.iv;
-        remove0x(kid);
+        kid = cleanHexString(options.kid);
     }
 
     /// 如果KID为空或无效，从密钥生成
@@ -266,6 +412,39 @@ auto EncryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
         {
             kid = kid.substr(0, 32);
         }
+    }
+
+    /// 如果提供了IV，确保长度合适
+    if (!iv.empty())
+    {
+        if (iv.length() < 32)
+        {
+            iv.append(32 - iv.length(), '0');
+        }
+        else if (iv.length() > 32)
+        {
+            iv = iv.substr(0, 32);
+        }
+    }
+
+    /// 处理密钥文件保存
+    std::string keyfile = options.keyfile;
+    if (!keyfile.empty())
+    {
+        /// 保存密钥到文件
+        if (saveKeyToFile(key, kid, options.method, keyfile))
+        {
+            std::cout << "密钥已保存到: " << keyfile << std::endl;
+        }
+    }
+    else
+    {
+        /// 如果没有指定密钥文件，询问用户是否要保存
+        std::cout << "警告: 未指定密钥文件，强烈建议保存密钥以便后续解密！" << std::endl;
+        std::cout << "您可以在命令行中添加 --keyfile 参数来保存密钥。" << std::endl;
+        std::cout << "加密密钥: " << key << std::endl;
+        std::cout << "Key ID: " << kid << std::endl;
+        std::cout << "请妥善保管以上信息，否则将无法解密视频！" << std::endl;
     }
 
     /// 确保输出为MP4格式（CENC加密只支持MP4）
@@ -290,7 +469,7 @@ auto EncryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
     cmd << "\"" << XTool::getFFmpegPath() << "\" ";
 
     /// 基本参数
-    // cmd << "-hide_banner -progress pipe:1 -nostats -loglevel info ";
+    cmd << "-hide_banner -progress pipe:1 -nostats -loglevel info ";
     cmd << "-y "; /// 覆盖输出文件
 
     /// 输入文件
@@ -328,6 +507,12 @@ auto EncryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
     cmd << "-encryption_key " << key << " ";
     cmd << "-encryption_kid " << kid << " ";
 
+    /// 如果提供了IV，也添加
+    if (!iv.empty())
+    {
+        cmd << "-encryption_iv " << iv << " ";
+    }
+
     /// 输出文件
     cmd << "\"" << outputFile << "\"";
 
@@ -350,7 +535,24 @@ auto EncryptCommandBuilder::getTitle(const std::map<std::string, ParameterValue>
         method                 = "MP4 CENC (" + userMethod + ")";
     }
 
-    return "加密: " + inputPath.filename().string() + " → " + outputPath.filename().string() + " (" + method + ")";
+    std::string title =
+            "加密: " + inputPath.filename().string() + " → " + outputPath.filename().string() + " (" + method + ")";
+
+    /// 如果指定了密钥文件，在标题中添加提示
+    if (params.contains("--keyfile"))
+    {
+        title += " [密钥保存到文件]";
+    }
+    else if (params.contains("--key"))
+    {
+        title += " [使用自定义密钥]";
+    }
+    else
+    {
+        title += " [自动生成密钥]";
+    }
+
+    return title;
 }
 
 IMPLEMENT_CREATE(EncryptCommandBuilder);

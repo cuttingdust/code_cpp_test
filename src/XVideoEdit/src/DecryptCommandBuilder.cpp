@@ -9,6 +9,7 @@
 #include <ranges>
 #include <filesystem>
 #include <chrono>
+#include <fstream>
 
 /// 支持的解密算法
 const std::vector<std::string> DecryptCommandBuilder::SUPPORTED_CIPHERS = {
@@ -17,6 +18,141 @@ const std::vector<std::string> DecryptCommandBuilder::SUPPORTED_CIPHERS = {
     "aes-128-cbc",  /// 用于OpenSSL解密
     "aes-256-cbc"   /// 用于OpenSSL解密
 };
+
+auto DecryptCommandBuilder::parseKeyFileContent(const std::string& content, std::string& key, std::string& kid,
+                                                std::string& method) const -> bool
+{
+    bool foundKey    = false;
+    bool foundKid    = false;
+    bool foundMethod = false;
+
+    std::istringstream stream(content);
+    std::string        line;
+
+    /// 正则表达式匹配各种格式
+    std::regex keyRegex(R"(解密密钥\s*[\(\)\-\:]*\s*(0x)?([0-9a-fA-F]+))", std::regex::icase);
+    std::regex kidRegex(R"(Key\s+ID\s*[\(\)\-\:]*\s*(0x)?([0-9a-fA-F]+))", std::regex::icase);
+    std::regex methodRegex(R"(加密方法\s*[\(\)\-\:]*\s*(\S+))", std::regex::icase);
+
+    /// 也匹配简单格式
+    std::regex simpleKeyRegex(R"(--key\s+([0-9a-fA-F]+))");
+    std::regex simpleKidRegex(R"(--kid\s+([0-9a-fA-F]+))");
+    std::regex simpleMethodRegex(R"(--method\s+(\S+))");
+
+    while (std::getline(stream, line))
+    {
+        std::smatch matches;
+
+        /// 尝试匹配解密密钥
+        if (!foundKey && std::regex_search(line, matches, keyRegex) && matches.size() >= 3)
+        {
+            key = matches[2].str(); /// 获取十六进制部分
+            // std::cout << "从密钥文件读取到解密密钥: " << key << std::endl;
+            foundKey = true;
+        }
+        else if (!foundKey && std::regex_search(line, matches, simpleKeyRegex) && matches.size() >= 2)
+        {
+            key = matches[1].str();
+            // std::cout << "从密钥文件读取到解密密钥: " << key << std::endl;
+            foundKey = true;
+        }
+
+        /// 尝试匹配Key ID
+        if (!foundKid && std::regex_search(line, matches, kidRegex) && matches.size() >= 3)
+        {
+            kid = matches[2].str();
+            // std::cout << "从密钥文件读取到Key ID: " << kid << std::endl;
+            foundKid = true;
+        }
+        else if (!foundKid && std::regex_search(line, matches, simpleKidRegex) && matches.size() >= 2)
+        {
+            kid = matches[1].str();
+            // std::cout << "从密钥文件读取到Key ID: " << kid << std::endl;
+            foundKid = true;
+        }
+
+        /// 尝试匹配加密方法
+        if (!foundMethod && std::regex_search(line, matches, methodRegex) && matches.size() >= 2)
+        {
+            method = matches[1].str();
+            // std::cout << "从密钥文件读取到加密方法: " << method << std::endl;
+            foundMethod = true;
+        }
+        else if (!foundMethod && std::regex_search(line, matches, simpleMethodRegex) && matches.size() >= 2)
+        {
+            method = matches[1].str();
+            // std::cout << "从密钥文件读取到加密方法: " << method << std::endl;
+            foundMethod = true;
+        }
+    }
+
+    /// 必须找到密钥
+    if (!foundKey)
+    {
+        std::cerr << "警告: 密钥文件中未找到解密密钥" << std::endl;
+        return false;
+    }
+
+    /// 如果没找到方法，使用默认值
+    if (!foundMethod)
+    {
+        method = "cenc-aes-ctr";
+        std::cout << "使用默认解密方法: " << method << std::endl;
+    }
+
+    /// 如果没找到KID，尝试使用密钥（在某些情况下可以）
+    if (!foundKid)
+    {
+        std::cout << "密钥文件中未找到Key ID，尝试使用密钥作为KID" << std::endl;
+        /// 在build方法中会处理
+    }
+
+    return true;
+}
+
+auto DecryptCommandBuilder::readKeyFromFile(const std::string& keyfile, std::string& key, std::string& kid,
+                                            std::string& method, std::string& errorMsg) const -> bool
+{
+    try
+    {
+        if (!std::filesystem::exists(keyfile))
+        {
+            errorMsg = "密钥文件不存在: " + keyfile;
+            return false;
+        }
+
+        std::ifstream file(keyfile);
+        if (!file.is_open())
+        {
+            errorMsg = "无法打开密钥文件: " + keyfile;
+            return false;
+        }
+
+        /// 读取文件内容
+        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
+
+        if (content.empty())
+        {
+            errorMsg = "密钥文件为空: " + keyfile;
+            return false;
+        }
+
+        /// 解析文件内容
+        if (!parseKeyFileContent(content, key, kid, method))
+        {
+            errorMsg = "无法从密钥文件中解析出必要的参数";
+            return false;
+        }
+
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        errorMsg = "读取密钥文件失败: " + std::string(e.what());
+        return false;
+    }
+}
 
 auto DecryptCommandBuilder::parseOptions(const std::map<std::string, ParameterValue>& params) const
         -> DecryptCommandBuilder::DecryptOptions
@@ -27,7 +163,13 @@ auto DecryptCommandBuilder::parseOptions(const std::map<std::string, ParameterVa
     options.input  = params.at("--input").asString();
     options.output = params.at("--output").asString();
 
-    /// 解密密钥（必需）
+    /// 密钥文件路径（如果提供，优先使用）
+    if (params.contains("--keyfile"))
+    {
+        options.keyfile = params.at("--keyfile").asString();
+    }
+
+    /// 解密密钥（必需，但如果提供了keyfile，可以从文件中读取）
     if (params.contains("--key"))
     {
         options.key = params.at("--key").asString();
@@ -194,30 +336,88 @@ auto DecryptCommandBuilder::validate(const std::map<std::string, ParameterValue>
         return false;
     }
 
-    /// 检查解密密钥
-    if (!params.contains("--key") && !params.contains("--password"))
+    /// 检查解密密钥来源
+    bool hasKeyParam     = params.contains("--key") || params.contains("--password");
+    bool hasKeyfileParam = params.contains("--keyfile");
+
+    if (!hasKeyParam && !hasKeyfileParam)
     {
-        errorMsg = "需要解密密钥(--key)或密码(--password)";
+        errorMsg = "需要解密密钥(--key)、密码(--password)或密钥文件(--keyfile)";
         return false;
     }
 
-    /// 获取并验证密钥
-    std::string key;
-    if (params.contains("--key"))
+    /// 如果同时指定了密钥和密钥文件，优先使用密钥文件，但给出警告
+    if (hasKeyParam && hasKeyfileParam)
     {
-        key = params.at("--key").asString();
-    }
-    else
-    {
-        key = params.at("--password").asString();
+        std::cout << "警告: 同时指定了密钥和密钥文件，优先使用密钥文件中的参数" << std::endl;
     }
 
-    /// 清理密钥字符串
-    key = cleanHexString(key);
-
-    if (!validateKeyFormat(key, "解密密钥", errorMsg))
+    /// 验证密钥文件（如果提供）
+    std::string keyFromFile, kidFromFile, methodFromFile;
+    if (hasKeyfileParam)
     {
-        return false;
+        std::string keyfile = params.at("--keyfile").asString();
+
+        if (!readKeyFromFile(keyfile, keyFromFile, kidFromFile, methodFromFile, errorMsg))
+        {
+            /// 如果读取文件失败，尝试使用命令行参数
+            std::cout << "警告: " << errorMsg << "，将尝试使用命令行参数" << std::endl;
+            errorMsg.clear();
+        }
+        else
+        {
+            // 验证从文件中读取的密钥
+            std::string cleanKey = cleanHexString(keyFromFile);
+            if (!validateKeyFormat(cleanKey, "密钥文件中的解密密钥", errorMsg))
+            {
+                return false;
+            }
+
+            // 验证从文件中读取的KID（如果存在）
+            if (!kidFromFile.empty())
+            {
+                std::string cleanKid = cleanHexString(kidFromFile);
+                if (!validateKeyFormat(cleanKid, "密钥文件中的Key ID", errorMsg))
+                {
+                    return false;
+                }
+            }
+
+            // 验证从文件中读取的方法
+            if (!validateCipher(methodFromFile, errorMsg))
+            {
+                return false;
+            }
+        }
+    }
+
+    /// 验证命令行中的密钥（如果没有使用密钥文件，或密钥文件读取失败）
+    if (!hasKeyfileParam || keyFromFile.empty())
+    {
+        if (!params.contains("--key") && !params.contains("--password"))
+        {
+            errorMsg = "需要解密密钥(--key)或密码(--password)";
+            return false;
+        }
+
+        /// 获取并验证密钥
+        std::string key;
+        if (params.contains("--key"))
+        {
+            key = params.at("--key").asString();
+        }
+        else
+        {
+            key = params.at("--password").asString();
+        }
+
+        /// 清理密钥字符串
+        key = cleanHexString(key);
+
+        if (!validateKeyFormat(key, "解密密钥", errorMsg))
+        {
+            return false;
+        }
     }
 
     /// 验证解密方法
@@ -331,10 +531,54 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
 {
     DecryptOptions options = parseOptions(params);
 
-    /// 清理和准备参数
-    std::string key = cleanHexString(options.key);
-    std::string kid;
+    /// 优先从密钥文件读取参数
+    std::string key, kid, method;
+    bool        fromKeyFile = false;
+
+    if (!options.keyfile.empty())
+    {
+        std::string errorMsg;
+        std::string fileKey, fileKid, fileMethod;
+
+        if (readKeyFromFile(options.keyfile, fileKey, fileKid, fileMethod, errorMsg))
+        {
+            key         = cleanHexString(fileKey);
+            kid         = cleanHexString(fileKid);
+            method      = fileMethod;
+            fromKeyFile = true;
+
+            std::cout << "使用密钥文件中的参数:" << std::endl;
+            std::cout << "  密钥: " << key << std::endl;
+            if (!kid.empty())
+                std::cout << "  KID: " << kid << std::endl;
+            std::cout << "  方法: " << method << std::endl;
+        }
+        else
+        {
+            std::cout << "警告: " << errorMsg << "，将使用命令行参数" << std::endl;
+        }
+    }
+
+    /// 如果没有从密钥文件读取到参数，使用命令行参数
+    if (!fromKeyFile)
+    {
+        /// 清理和准备参数
+        key    = cleanHexString(options.key);
+        method = options.method;
+
+        /// 准备KID（Key ID）
+        if (!options.kid.empty())
+        {
+            kid = cleanHexString(options.kid);
+        }
+    }
+
+    /// 准备IV（如果提供）
     std::string iv;
+    if (!options.iv.empty())
+    {
+        iv = cleanHexString(options.iv);
+    }
 
     /// 确保密钥长度合适（32 hex字符 = 16字节）
     if (key.length() < 32)
@@ -347,9 +591,13 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
     }
 
     /// 准备KID（Key ID）
-    if (!options.kid.empty())
+    if (kid.empty())
     {
-        kid = cleanHexString(options.kid);
+        /// 如果KID为空，尝试使用密钥
+        kid = key.substr(0, 32);
+    }
+    else
+    {
         if (kid.length() < 32)
         {
             kid.append(32 - kid.length(), '0');
@@ -361,9 +609,8 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
     }
 
     /// 准备IV（如果提供）
-    if (!options.iv.empty())
+    if (!iv.empty())
     {
-        iv = cleanHexString(options.iv);
         if (iv.length() < 32)
         {
             iv.append(32 - iv.length(), '0');
@@ -392,6 +639,7 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
 
         /// 添加解密参数
         cmd << "-decryption_key " << key << " ";
+
 
         /// 添加默认的ffplay参数
         cmd << "-autoexit "; /// 播放完毕后自动退出
@@ -446,11 +694,6 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
 
     /// 解密参数
     cmd << "-decryption_key " << key << " ";
-
-    if (!kid.empty())
-    {
-        cmd << "-decryption_kid " << kid << " ";
-    }
 
     if (!iv.empty())
     {
@@ -547,7 +790,7 @@ auto DecryptCommandBuilder::getTitle(const std::map<std::string, ParameterValue>
     std::string title =
             "解密: " + inputPath.filename().string() + " → " + outputPath.filename().string() + " (" + method + ")";
 
-    // 添加播放相关说明
+    /// 添加播放相关说明
     if (params.contains("--play") && params.at("--play").asBool())
     {
         if (params.contains("--play-only") && params.at("--play-only").asBool())
@@ -563,6 +806,20 @@ auto DecryptCommandBuilder::getTitle(const std::map<std::string, ParameterValue>
         {
             title += " [播放后删除]";
         }
+    }
+
+    /// 添加密钥文件说明
+    if (params.contains("--keyfile"))
+    {
+        title += " [从密钥文件读取]";
+    }
+    else if (params.contains("--key"))
+    {
+        title += " [使用命令行密钥]";
+    }
+    else if (params.contains("--password"))
+    {
+        title += " [使用密码]";
     }
 
     return title;
