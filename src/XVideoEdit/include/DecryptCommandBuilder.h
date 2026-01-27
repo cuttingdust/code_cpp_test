@@ -25,6 +25,12 @@ private:
         std::string method   = "cenc-aes-ctr"; ///< 解密方法
         bool        use_hmac = false;          ///< 是否使用HMAC验证
         std::string hmac_key;                  ///< HMAC密钥（如果启用）
+
+        ////////////////// 新增播放相关参数 ////////////////////////////
+        bool        play_after_decrypt = false; ///< 解密后直接播放
+        bool        delete_after_play  = false; ///< 播放后删除解密文件
+        bool        play_only          = false; ///< 只播放不解密到文件
+        std::string ffplay_args;                ///< ffplay额外参数
     };
 
     /// 支持的解密方法

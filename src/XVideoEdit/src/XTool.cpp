@@ -111,7 +111,7 @@ auto XTool::getFFprobePath() -> std::string
 #endif
 }
 
-auto XTool::getFFPlayPath() -> std::string
+auto XTool::getFFplayPath() -> std::string
 {
 #ifdef FFPLAY_PATH
     return FFPLAY_PATH;

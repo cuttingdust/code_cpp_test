@@ -18,5 +18,5 @@ public:
 
     static auto getFFprobePath() -> std::string;
 
-    static auto getFFPlayPath() -> std::string;
+    static auto getFFplayPath() -> std::string;
 };

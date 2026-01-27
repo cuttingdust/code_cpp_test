@@ -7,6 +7,8 @@
 #include <numeric>
 #include <regex>
 #include <ranges>
+#include <filesystem>
+#include <chrono>
 
 /// 支持的解密算法
 const std::vector<std::string> DecryptCommandBuilder::SUPPORTED_CIPHERS = {
@@ -88,6 +90,27 @@ auto DecryptCommandBuilder::parseOptions(const std::map<std::string, ParameterVa
     if (params.contains("--hmac-key"))
     {
         options.hmac_key = params.at("--hmac-key").asString();
+    }
+
+    /// 新增播放相关参数
+    if (params.contains("--play"))
+    {
+        options.play_after_decrypt = parseBool(params.at("--play").asString());
+    }
+
+    if (params.contains("--delete-after-play"))
+    {
+        options.delete_after_play = parseBool(params.at("--delete-after-play").asString());
+    }
+
+    if (params.contains("--play-only"))
+    {
+        options.play_only = parseBool(params.at("--play-only").asString());
+    }
+
+    if (params.contains("--ffplay-args"))
+    {
+        options.ffplay_args = params.at("--ffplay-args").asString();
     }
 
     return options;
@@ -268,6 +291,39 @@ auto DecryptCommandBuilder::validate(const std::map<std::string, ParameterValue>
         return false;
     }
 
+    /// 检查播放相关参数逻辑
+    bool play_after_decrypt = false;
+    bool play_only          = false;
+    bool delete_after_play  = false;
+
+    if (params.contains("--play"))
+    {
+        play_after_decrypt = params.at("--play").asBool();
+    }
+
+    if (params.contains("--play-only"))
+    {
+        play_only = params.at("--play-only").asBool();
+    }
+
+    if (params.contains("--delete-after-play"))
+    {
+        delete_after_play = params.at("--delete-after-play").asBool();
+    }
+
+    /// 逻辑检查
+    if (play_only && !play_after_decrypt)
+    {
+        errorMsg = "--play-only 参数需要同时指定 --play true";
+        return false;
+    }
+
+    if (delete_after_play && !play_after_decrypt)
+    {
+        errorMsg = "--delete-after-play 参数需要同时指定 --play true";
+        return false;
+    }
+
     return true;
 }
 
@@ -303,12 +359,6 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
             kid = kid.substr(0, 32);
         }
     }
-    else
-    {
-        /// 如果没有提供KID，使用默认值
-        /// 注意：实际解密时需要正确的KID，这里只是示例
-        kid = key.substr(0, 32); /// 使用密钥的一部分作为KID
-    }
 
     /// 准备IV（如果提供）
     if (!options.iv.empty())
@@ -324,36 +374,91 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
         }
     }
 
+    std::stringstream cmd;
+
+#ifdef _WIN32
+    /// Windows: 使用 cmd /c 包装整个命令
+    cmd << "cmd /c \"";
+#else
+    /// Linux/macOS: 使用 sh -c
+    cmd << "sh -c \"";
+#endif
+
+    /// 如果只需要播放，不需要保存解密文件
+    if (options.play_only)
+    {
+        /// 使用 ffplay 直接播放解密流
+        cmd << "\"" << XTool::getFFplayPath() << "\" ";
+
+        /// 添加解密参数
+        cmd << "-decryption_key " << key << " ";
+
+        /// 添加默认的ffplay参数
+        cmd << "-autoexit "; /// 播放完毕后自动退出
+        cmd << "-window_title \"Decrypted Video - " << std::filesystem::path(options.input).filename().string()
+            << "\" ";
+
+        /// 添加用户指定的额外参数
+        if (!options.ffplay_args.empty())
+        {
+            cmd << options.ffplay_args << " ";
+        }
+
+        cmd << "\"" << options.input << "\"";
+
+        return cmd.str();
+    }
+
     /// 构建输出文件名
     std::string outputFile = options.output;
 
-    /// 如果输出文件扩展名与输入相同，添加_decrypted后缀
-    std::string inputExt  = std::filesystem::path(options.input).extension().string();
-    std::string outputExt = std::filesystem::path(outputFile).extension().string();
-
-    if (outputExt.empty() || outputExt == inputExt)
+    /// 如果设置了播放标记，但输出文件与输入相同，添加后缀
+    if (options.play_after_decrypt)
     {
         size_t dotPos = outputFile.find_last_of('.');
         if (dotPos != std::string::npos)
         {
-            outputFile = outputFile.substr(0, dotPos) + "_decrypted" + inputExt;
+            outputFile = outputFile.substr(0, dotPos) + "_decrypted" +
+                    std::filesystem::path(options.input).extension().string();
         }
         else
         {
-            outputFile += "_decrypted" + inputExt;
+            outputFile += "_decrypted";
+        }
+    }
+    else
+    {
+        /// 正常解密也添加后缀
+        size_t dotPos = outputFile.find_last_of('.');
+        if (dotPos != std::string::npos)
+        {
+            outputFile = outputFile.substr(0, dotPos) + "_decrypted" +
+                    std::filesystem::path(options.input).extension().string();
+        }
+        else
+        {
+            outputFile += "_decrypted";
         }
     }
 
-    std::stringstream cmd;
+    /// 构建ffmpeg命令
     cmd << "\"" << XTool::getFFmpegPath() << "\" ";
 
     /// 解密参数
-    /// 注意：根据你的FFmpeg版本，解密参数可能不同
-    /// 以下是通用的CENC解密参数
     cmd << "-decryption_key " << key << " ";
 
+    if (!kid.empty())
+    {
+        cmd << "-decryption_kid " << kid << " ";
+    }
+
+    if (!iv.empty())
+    {
+        cmd << "-decryption_iv " << iv << " ";
+    }
+
     /// 基本参数
-    // cmd << "-hide_banner -progress pipe:1 -nostats -loglevel info ";
+    cmd << "-hide_banner -progress pipe:1 -nostats -loglevel info ";
     cmd << "-y "; /// 覆盖输出文件
 
     /// 输入文件
@@ -383,11 +488,43 @@ auto DecryptCommandBuilder::build(const std::map<std::string, ParameterValue>& p
         cmd << "-c copy ";
     }
 
-    // /// MP4优化标记
-    // cmd << "-movflags +faststart ";
-
     /// 输出文件
     cmd << "\"" << outputFile << "\"";
+
+    /// 如果需要在解密后播放
+    if (options.play_after_decrypt)
+    {
+        cmd << " && ";
+
+        /// 使用 ffplay 播放解密后的文件
+        cmd << "\"" << XTool::getFFplayPath() << "\" ";
+        cmd << "-autoexit "; /// 默认添加自动退出
+
+        /// 添加用户指定的额外参数
+        if (!options.ffplay_args.empty())
+        {
+            cmd << options.ffplay_args << " ";
+        }
+        else
+        {
+            /// 默认设置窗口标题
+            cmd << "-window_title \"Decrypted Video: " << std::filesystem::path(outputFile).filename().string()
+                << "\" ";
+        }
+
+        cmd << "\"" << outputFile << "\"";
+
+        /// 如果需要播放后删除
+        if (options.delete_after_play)
+        {
+            cmd << " && ";
+#ifdef _WIN32
+            cmd << "del \"" << outputFile << "\"";
+#else
+            cmd << "rm \"" << outputFile << "\"";
+#endif
+        }
+    }
 
     return cmd.str();
 }
@@ -407,7 +544,28 @@ auto DecryptCommandBuilder::getTitle(const std::map<std::string, ParameterValue>
         method                 = "MP4 CENC (" + userMethod + ")";
     }
 
-    return "解密: " + inputPath.filename().string() + " → " + outputPath.filename().string() + " (" + method + ")";
+    std::string title =
+            "解密: " + inputPath.filename().string() + " → " + outputPath.filename().string() + " (" + method + ")";
+
+    // 添加播放相关说明
+    if (params.contains("--play") && params.at("--play").asBool())
+    {
+        if (params.contains("--play-only") && params.at("--play-only").asBool())
+        {
+            title += " [ffplay直接播放]";
+        }
+        else
+        {
+            title += " [解密后播放]";
+        }
+
+        if (params.contains("--delete-after-play") && params.at("--delete-after-play").asBool())
+        {
+            title += " [播放后删除]";
+        }
+    }
+
+    return title;
 }
 
 IMPLEMENT_CREATE(DecryptCommandBuilder);

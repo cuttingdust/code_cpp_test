@@ -860,6 +860,7 @@ int main(int argc, char* argv[])
 
 
     /// 示例8：视频解密任务
+    /// 示例8：视频解密任务 - 更新为支持播放功能
     user_input
             .registerTask<DecryptCommandBuilder, DecryptProgressBar>(
                     "decrypt", "av",
@@ -872,12 +873,15 @@ int main(int argc, char* argv[])
                         std::string method =
                                 params.contains("--method") ? params.at("--method").asString() : "AES-128-CBC";
 
-                        std::cout << "  解密文件: " << src << " → " << dst << std::endl;
+                        std::cout << "  输入文件: " << src << std::endl;
+                        std::cout << "  输出文件: " << dst << std::endl;
                         std::cout << "  解密方法: " << method << std::endl;
 
                         if (params.contains("--key"))
                         {
+                            std::string key = params.at("--key").asString();
                             std::cout << "  使用密钥解密" << std::endl;
+                            std::cout << "  密钥长度: " << key.length() << " 字符" << std::endl;
                         }
                         else if (params.contains("--password"))
                         {
@@ -888,6 +892,34 @@ int main(int argc, char* argv[])
                             std::cout << "  错误: 需要解密密钥或密码" << std::endl;
                         }
 
+                        /// 显示播放相关信息
+                        bool play_enabled = params.contains("--play") && params.at("--play").asBool();
+                        if (play_enabled)
+                        {
+                            bool play_only = params.contains("--play-only") && params.at("--play-only").asBool();
+                            if (play_only)
+                            {
+                                std::cout << "  播放模式: 使用ffplay直接播放（不保存文件）" << std::endl;
+                            }
+                            else
+                            {
+                                std::cout << "  播放模式: 解密后使用ffplay播放" << std::endl;
+                            }
+
+                            if (params.contains("--delete-after-play") && params.at("--delete-after-play").asBool())
+                            {
+                                std::cout << "  播放后删除: 是" << std::endl;
+                            }
+
+                            if (params.contains("--ffplay-args"))
+                            {
+                                std::cout << "  ffplay参数: " << params.at("--ffplay-args").asString() << std::endl;
+                            }
+                            else
+                            {
+                                std::cout << "  ffplay参数: 使用默认设置（自动退出、带标题窗口）" << std::endl;
+                            }
+                        }
                     },
                     "解密视频文件，恢复原始内容")
             .addFileParam("--input", "加密的视频文件", true,
@@ -941,6 +973,8 @@ int main(int argc, char* argv[])
                                 /// 提供密钥长度建议
                                 static const std::vector<std::string> keySuggestions = {
                                     "0123456789abcdef0123456789abcdef", /// 32 chars for AES-128
+                                    "1234567890abcdef1234567890abcdef", /// 示例密钥
+                                    "fedcba9876543210fedcba9876543210"  /// 示例密钥
                                 };
                                 std::vector<std::string> suggestions;
                                 for (const auto& key : keySuggestions)
@@ -974,7 +1008,8 @@ int main(int argc, char* argv[])
                             {
                                 /// KID通常是16字节（32个十六进制字符）
                                 static const std::vector<std::string> kidSuggestions = {
-                                    "000102030405060708090a0b0c0d0e0f", "fedcba9876543210fedcba9876543210"
+                                    "000102030405060708090a0b0c0d0e0f", "fedcba9876543210fedcba9876543210",
+                                    "0123456789abcdef0123456789abcdef"
                                 };
                                 std::vector<std::string> suggestions;
                                 for (const auto& kid : kidSuggestions)
@@ -1065,7 +1100,87 @@ int main(int argc, char* argv[])
                                   }
                               }
                               return suggestions;
-                          });
+                          })
+            .addBoolParam("--play", "解密后直接播放(使用ffplay)", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--delete-after-play", "播放后删除解密文件", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addBoolParam("--play-only", "只播放不保存解密文件(使用ffplay直接播放)", false,
+                          [](std::string_view partial) -> std::vector<std::string>
+                          {
+                              static const std::vector<std::string> boolValues = { "true", "false", "1",  "0",
+                                                                                   "yes",  "no",    "on", "off" };
+                              std::vector<std::string>              suggestions;
+                              for (const auto& value : boolValues)
+                              {
+                                  if (value.starts_with(partial))
+                                  {
+                                      suggestions.push_back(value);
+                                  }
+                              }
+                              return suggestions;
+                          })
+            .addStringParam("--ffplay-args", "ffplay额外参数(可选)", false,
+                            [](std::string_view partial) -> std::vector<std::string>
+                            {
+                                /// 常用的ffplay参数
+                                static const std::vector<std::string> ffplayArgsSuggestions = {
+                                    "-autoexit",
+                                    "-loop 0",
+                                    "-fs",          ///< 全屏模式
+                                    "-x 800",       ///< 设置宽度
+                                    "-y 600",       ///< 设置高度
+                                    "-left 100",    ///< 窗口左侧位置
+                                    "-top 100",     ///< 窗口顶部位置
+                                    "-an",          ///< 禁用音频
+                                    "-vn",          ///< 禁用视频
+                                    "-sn",          ///< 禁用字幕
+                                    "-ss 00:00:10", ///< 从指定时间开始播放
+                                    "-t 30",        ///< 播放指定时长
+                                    "-volume 50",   ///< 音量设置
+                                    "-window_title \"自定义标题\"",
+                                    "-vf \"scale=640:480\"",                    ///< 视频滤镜
+                                    "-af \"volume=2.0\"",                       ///< 音频滤镜
+                                    "-stats",                                   ///< 显示统计信息
+                                    "-vf \"hue=s=0\"",                          ///< 黑白滤镜
+                                    "-vf \"eq=contrast=1.5:brightness=-0.05\"", ///< 对比度亮度调整
+                                };
+                                std::vector<std::string> suggestions;
+                                for (const auto& arg : ffplayArgsSuggestions)
+                                {
+                                    if (arg.starts_with(partial))
+                                    {
+                                        suggestions.push_back(arg);
+                                    }
+                                }
+                                return suggestions;
+                            });
 
 
     /// 注册自定义命令

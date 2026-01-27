@@ -86,6 +86,7 @@ public:
     OutputCallback     outputCallback_;
     std::thread        stdoutThread_;
     std::thread        stderrThread_;
+    ExecutionMode      executionMode_ = ExecutionMode::Direct;
 };
 
 XExec::XExec() : impl_(std::make_unique<PImpl>())
@@ -100,9 +101,30 @@ auto XExec::setOutputCallback(const OutputCallback& callback) -> void
     impl_->outputCallback_ = callback;
 }
 
+auto XExec::setExecutionMode(ExecutionMode mode) -> void
+{
+    impl_->executionMode_ = mode;
+}
+
 auto XExec::start(const std::string_view& cmd, bool redirectStderr) -> bool
 {
-    return impl_->start(cmd, redirectStderr, impl_->outputCallback_);
+    /// 根据执行模式包装命令
+    std::string actualCmd;
+
+    if (impl_->executionMode_ == ExecutionMode::Shell)
+    {
+#ifdef _WIN32
+        actualCmd = "cmd /c \"" + std::string(cmd) + "\"";
+#else
+        actualCmd = "sh -c \"" + std::string(cmd) + "\"";
+#endif
+    }
+    else
+    {
+        actualCmd = std::string(cmd);
+    }
+
+    return impl_->start(actualCmd, redirectStderr, impl_->outputCallback_);
 }
 
 auto XExec::getOutput() const -> std::string
