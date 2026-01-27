@@ -1,16 +1,15 @@
 #include "ConvertCommandBuilder.h"
 #include "CutCommandBuilder.h"
 #include "AnalyzeCommandBuilder.h"
-
-#include "AVTask.h"
+#include "DecryptCommandBuilder.h"
+#include "EncryptCommandBuilder.h"
 
 #include "CVProgressBar.h"
 #include "CutProgressBar.h"
-#include "DecryptCommandBuilder.h"
 #include "DecryptProgressBar.h"
-#include "EncryptCommandBuilder.h"
 #include "EncryptProgressBar.h"
 
+#include "AVTask.h"
 #include "XUserInput.h"
 
 #include <iostream>
