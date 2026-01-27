@@ -888,10 +888,6 @@ int main(int argc, char* argv[])
                             std::cout << "  错误: 需要解密密钥或密码" << std::endl;
                         }
 
-                        if (!msg.empty())
-                        {
-                            std::cout << "  解密信息: " << msg << std::endl;
-                        }
                     },
                     "解密视频文件，恢复原始内容")
             .addFileParam("--input", "加密的视频文件", true,
