@@ -172,6 +172,7 @@ add_subdirectory(FileLogTest) # 日志测试
 add_subdirectory(ProgrammingParadigmTest) # 编程范式
 add_subdirectory(LogTest) # 日志示例
 add_subdirectory(StringTest) 
+add_subdirectory(RCharTest) 
 add_subdirectory(DataPtr) 
 add_subdirectory(UsingFunction) #函数指针
 add_subdirectory(MsgServer) 
