@@ -177,6 +177,7 @@ add_subdirectory(DataPtr)
 add_subdirectory(UsingFunction) #函数指针
 add_subdirectory(FunctionTemplate)
 add_subdirectory(ClassTemplate)
+add_subdirectory(ClassVector)
 add_subdirectory(MsgServer) 
 add_subdirectory(XExecTest) 
 add_subdirectory(XUserInput) 
