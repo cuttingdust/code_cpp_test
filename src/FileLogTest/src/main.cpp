@@ -41,7 +41,7 @@ static std::string GetNow(const char *fmt = "%Y-%m-%d %H:%M:%S", int time_zone =
 static std::ostream logstr(std::cout.rdbuf()); /// 设置buf
 void                SetLogBuf(std::streambuf *buf)
 {
-    logstr.set_rdbuf(buf);
+    logstr.rdbuf(buf);
 }
 
 void LogWrite(std::string level, std::string log, std::string file, int line)

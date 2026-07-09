@@ -198,6 +198,11 @@ auto XExec::execute(const std::string_view& command, bool redirectStderr, int ti
     return result;
 }
 
+XExec::PImpl::~PImpl()
+{
+    cleanup();
+}
+
 #ifdef _WIN32
 /// ==================== Windows 实现 ====================
 
@@ -232,11 +237,6 @@ auto XExec::PImpl::checkProcessExited() -> bool
         return exitCode != STILL_ACTIVE;
     }
     return true; /// 获取失败也认为已退出
-}
-
-XExec::PImpl::~PImpl()
-{
-    cleanup();
 }
 
 auto XExec::PImpl::start(const std::string_view& cmd, bool redirectStderr, OutputCallback callback) -> bool
@@ -517,7 +517,7 @@ bool XExec::PImpl::checkProcessExited()
     return result > 0;
 }
 
-bool XExec::PImpl::start(const std::string& cmd, bool redirectStderr, OutputCallback callback)
+bool XExec::PImpl::start(const std::string_view& cmd, bool redirectStderr, OutputCallback callback)
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -619,7 +619,8 @@ bool XExec::PImpl::start(const std::string& cmd, bool redirectStderr, OutputCall
         }
 
         // 执行命令
-        execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
+        const std::string command{ cmd };
+        execl("/bin/sh", "sh", "-c", command.c_str(), nullptr);
         exit(127); // exec失败
     }
     else // 父进程

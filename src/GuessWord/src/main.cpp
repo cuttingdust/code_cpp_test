@@ -7,6 +7,7 @@
 #include <format>
 #include <concepts>
 #include <array>
+#include <tuple>
 
 /// 使用C++20的模块化导入（如果编译器支持）
 // import <iostream>;
@@ -171,7 +172,7 @@ public:
         cout << std::format("  总尝试次数: {}\n", std::get<2>(stats));
     }
 
-    auto getGameStats() const
+    auto getGameStats() const -> std::tuple<int, int, int>
     {
         int correct   = std::ranges::count_if(usedLetters_,
                                               [this](char c)

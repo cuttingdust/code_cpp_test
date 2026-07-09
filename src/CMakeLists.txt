@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 if(POLICY CMP0177)
-	cmake_policy(SET CMP0177 NEW)
+  cmake_policy(SET CMP0177 NEW)
 endif()
 
 # 使用 vcpkg 工具链文件 Warning  工具连设置必须是在project 前面
@@ -8,8 +8,8 @@ set(CMAKE_TOOLCHAIN_FILE $ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake CACHE
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # 获取父目录
-get_filename_component(CURRENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}" ABSOLUTE)  
-get_filename_component(PARENT_DIR "${CURRENT_DIR}" DIRECTORY)  
+get_filename_component(CURRENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}" ABSOLUTE)
+get_filename_component(PARENT_DIR "${CURRENT_DIR}" DIRECTORY)
 get_filename_component(PARENT_NAME ${PARENT_DIR} NAME)
 message(STATUS "Current Directory: ${CURRENT_DIR}")
 message(STATUS "Parent Directory: ${PARENT_DIR}")
@@ -20,7 +20,7 @@ message("PROJECT_NAME: ${PROJECT_NAME}")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 if(MSVC)
-set(CMAKE_GENERATOR_PLATFORM x64)
+  set(CMAKE_GENERATOR_PLATFORM x64)
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -35,9 +35,9 @@ find_package(OpenMP)
 message("OpenMP_FOUND = ${OpenMP_FOUND}")
 
 if(OpenMP_FOUND)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
 # #MFC
@@ -95,30 +95,30 @@ message("OpenCV_LIBS = ${OpenCV_LIBS}")
 # 查找FFmpeg可执行文件
 find_program(FFMPEG_EXECUTABLE ffmpeg)
 if(FFMPEG_EXECUTABLE)
-    message(STATUS "找到 FFmpeg: ${FFMPEG_EXECUTABLE}")
-    # 你可以将路径传递给C++源代码
-    add_definitions(-DFFMPEG_PATH="${FFMPEG_EXECUTABLE}")
+  message(STATUS "找到 FFmpeg: ${FFMPEG_EXECUTABLE}")
+  # 你可以将路径传递给C++源代码
+  add_definitions(-DFFMPEG_PATH="${FFMPEG_EXECUTABLE}")
 else()
-    message(WARNING "未找到 ffmpeg 可执行文件。请安装或手动指定路径。")
+  message(WARNING "未找到 ffmpeg 可执行文件。请安装或手动指定路径。")
 endif()
 
 # 查找FFplay可执行文件
 find_program(FFPLAY_EXECUTABLE ffplay)
 if(FFPLAY_EXECUTABLE)
-    message(STATUS "找到 FFPlay: ${FFPLAY_EXECUTABLE}")
-    # 你可以将路径传递给C++源代码
-    add_definitions(-DFFPLAY_PATH="${FFPLAY_EXECUTABLE}")
+  message(STATUS "找到 FFPlay: ${FFPLAY_EXECUTABLE}")
+  # 你可以将路径传递给C++源代码
+  add_definitions(-DFFPLAY_PATH="${FFPLAY_EXECUTABLE}")
 else()
-    message(WARNING "未找到 ffplay 可执行文件。请安装或手动指定路径。")
+  message(WARNING "未找到 ffplay 可执行文件。请安装或手动指定路径。")
 endif()
 
 find_program(FFPROBE_EXECUTABLE ffprobe)
 if(FFPROBE_EXECUTABLE)
-    message(STATUS "找到 FFprobe: ${FFPROBE_EXECUTABLE}")
-    # 你可以将路径传递给C++源代码
-    add_definitions(-DFFPROBE_PATH="${FFPROBE_EXECUTABLE}")
+  message(STATUS "找到 FFprobe: ${FFPROBE_EXECUTABLE}")
+  # 你可以将路径传递给C++源代码
+  add_definitions(-DFFPROBE_PATH="${FFPROBE_EXECUTABLE}")
 else()
-    message(WARNING "未找到 ffprobe 可执行文件。请安装或手动指定路径。")
+  message(WARNING "未找到 ffprobe 可执行文件。请安装或手动指定路径。")
 endif()
 
 #==================================================================================#
@@ -138,7 +138,7 @@ set(QRC_SOURCE_FILES)
 
 # 忽略特定库
 if(MSVC)
-SET(CMAKE_EXE_LINKER_FLAGS /NODEFAULTLIB:"libcmt.lib;libc.lib;msvcrt.lib")
+  SET(CMAKE_EXE_LINKER_FLAGS /NODEFAULTLIB:"libcmt.lib;libc.lib;msvcrt.lib")
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -153,9 +153,13 @@ set_target_properties(replxx PROPERTIES FOLDER "third_party")
 add_subdirectory(third_party/indicators)
 set_target_properties(indicators PROPERTIES FOLDER "third_party")
 
-add_subdirectory(MemoryLeakDetector)
+if(WIN32)
+  add_subdirectory(MemoryLeakDetector)
+endif()
 add_subdirectory(GuessWord)
-add_subdirectory(Card21Game)
+if(WIN32)
+  add_subdirectory(Card21Game)
+endif()
 add_subdirectory(TicTacToe)
 add_subdirectory(Timer)
 add_subdirectory(MoveTest)
@@ -171,19 +175,19 @@ add_subdirectory(FileStreamInTest) # 文件的输入
 add_subdirectory(FileLogTest) # 日志测试
 add_subdirectory(ProgrammingParadigmTest) # 编程范式
 add_subdirectory(LogTest) # 日志示例
-add_subdirectory(StringTest) 
-add_subdirectory(RCharTest) 
-add_subdirectory(DataPtr) 
+add_subdirectory(StringTest)
+add_subdirectory(RCharTest)
+add_subdirectory(DataPtr)
 add_subdirectory(UsingFunction) #函数指针
 add_subdirectory(FunctionTemplate)
 add_subdirectory(ClassTemplate)
 add_subdirectory(ClassVector)
 add_subdirectory(ClassAllocator)
 add_subdirectory(ClassComplex)
-add_subdirectory(MsgServer) 
-add_subdirectory(XExecTest) 
-add_subdirectory(XUserInput) 
-add_subdirectory(XVideoEdit) 
+add_subdirectory(MsgServer)
+add_subdirectory(XExecTest)
+add_subdirectory(XUserInput)
+add_subdirectory(XVideoEdit)
 
 # 拷贝assert目录到输出目录
 set(ASSERT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assert)

@@ -1,7 +1,6 @@
 ﻿#include "base16.h"
 
 #include <iostream>
-#include <__msvc_ostream.hpp>
 
 /// 静态全局变量 作用域本cpp文件
 static const std::string enc_tab{ "0123456789ABCDEF" };

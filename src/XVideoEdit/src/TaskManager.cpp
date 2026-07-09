@@ -160,7 +160,7 @@ auto TaskManager::removeTaskType(const std::string_view& typeName) -> bool
         return false;
     }
 
-    if (impl_->taskTypeConfigs_.erase(typeName) > 0)
+    if (impl_->taskTypeConfigs_.erase(std::string{ typeName }) > 0)
     {
         impl_->statistics_.totalTaskTypes--;
         return true;
@@ -408,7 +408,7 @@ auto TaskManager::removeTaskInstance(const std::string_view& name) -> bool
 {
     std::lock_guard<std::mutex> lock(impl_->mtx_);
 
-    if (impl_->taskInstances_.erase(name) > 0)
+    if (impl_->taskInstances_.erase(std::string{ name }) > 0)
     {
         impl_->statistics_.totalTaskInstances--;
         impl_->executionHistory_.erase(std::string{ name });

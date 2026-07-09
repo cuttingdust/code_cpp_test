@@ -1,6 +1,11 @@
 ﻿#include "XTool.h"
 
+#ifdef _WIN32
 #include <corecrt_io.h>
+#else
+#include <unistd.h>
+#endif
+#include <algorithm>
 #include <cstdio>
 #include <ranges>
 #include <sstream>

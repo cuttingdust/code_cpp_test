@@ -6,10 +6,11 @@
 #include <thread>
 #include <utility>
 
-namespace std
-{
-    class mutex;
-}
+#ifdef _MSC_VER
+#define CURRENT_FUNCTION __FUNCSIG__
+#else
+#define CURRENT_FUNCTION __PRETTY_FUNCTION__
+#endif
 
 struct Msg
 {
@@ -67,7 +68,7 @@ public:
 private:
     void Run()
     {
-        std::cout << __FUNCSIG__ << std::endl;
+        std::cout << CURRENT_FUNCTION << std::endl;
         while (!is_exit_) /// 消息处理主循环
         {
             /// 读取消息队列数据
@@ -110,15 +111,15 @@ public:
 private:
     void Post(const Msg &msg)
     {
-        std::cout << __FUNCSIG__ << msg.key << ":" << msg.data << std::endl;
+        std::cout << CURRENT_FUNCTION << msg.key << ":" << msg.data << std::endl;
     }
     void Get(const Msg &msg)
     {
-        std::cout << __FUNCSIG__ << msg.key << ":" << msg.data << std::endl;
+        std::cout << CURRENT_FUNCTION << msg.key << ":" << msg.data << std::endl;
     }
     void Head(const Msg &msg)
     {
-        std::cout << __FUNCSIG__ << msg.key << ":" << msg.data << std::endl;
+        std::cout << CURRENT_FUNCTION << msg.key << ":" << msg.data << std::endl;
     }
 };
 

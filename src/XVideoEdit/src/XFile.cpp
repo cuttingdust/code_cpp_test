@@ -334,7 +334,7 @@ auto XFile::isWindowsExecutable(const fs::path& path) -> bool
 }
 
 #else
-auto XFile::isWindowsExecutable(const fs::path& path) -> bool
+auto XFile::isUnixExecutable(const fs::path& path) -> bool
 {
     try
     {
