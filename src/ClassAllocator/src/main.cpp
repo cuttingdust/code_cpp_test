@@ -369,6 +369,49 @@ public:
         ++_version;
     }
 
+    iterator insert(iterator pos, const T &value)
+    {
+        pos.check_valid();
+        if (pos._owner != this)
+        {
+            throw std::invalid_argument("insert iterator belongs to a different vector");
+        }
+        if (pos._ptr < _first || pos._ptr > _last)
+        {
+            throw std::out_of_range("insert iterator is out of range");
+        }
+
+        // 扩容会改变底层地址，因此先保存下标；value 也可能引用容器内部元素，
+        // 必须在扩容和移动元素之前复制一份。
+        const size_t index = static_cast<size_t>(pos._ptr - _first);
+        T            value_copy(value);
+
+        if (full())
+        {
+            expand();
+        }
+
+        T *insert_pos = _first + index;
+        if (insert_pos == _last)
+        {
+            _allocator.construct(_last, value_copy);
+        }
+        else
+        {
+            // _last 指向未构造内存，先在这里复制构造最后一个元素，再将中间元素后移。
+            _allocator.construct(_last, *(_last - 1));
+            for (T *current = _last - 1; current != insert_pos; --current)
+            {
+                *current = *(current - 1);
+            }
+            *insert_pos = value_copy;
+        }
+
+        ++_last;
+        ++_version; // 当前教学实现采用保守策略：insert 后所有旧迭代器均失效。
+        return iterator(this, insert_pos, _version);
+    }
+
     void pop_back()
     {
         if (empty())
@@ -464,7 +507,7 @@ private:
         /// 关键修复2：先保存旧大小
         size_t old_size     = _last - _first;
         size_t old_capacity = _end - _first;
-        size_t new_capacity = old_capacity * 2;
+        size_t new_capacity = old_capacity == 0 ? 1 : old_capacity * 2;
 
         // T* new_first = new T[new_capacity];
         T *new_first = _allocator.allocate(new_capacity);
@@ -680,6 +723,55 @@ int main()
             const_out_of_range = true;
         }
         assert(const_out_of_range);
+    }
+
+    {
+        vector<int> values(3);
+        values.push_back(10);
+        values.push_back(30);
+
+        auto old_it   = values.begin();
+        auto inserted = values.insert(values.begin() + 1, 20);
+
+        assert(*inserted == 20);
+        assert(values.size() == 3);
+        assert(values[0] == 10);
+        assert(values[1] == 20);
+        assert(values[2] == 30);
+
+        // insert 修改了容器结构，当前调试策略会让所有旧迭代器失效。
+        bool invalidation_detected = false;
+        try
+        {
+            (void)*old_it;
+        }
+        catch (const std::runtime_error &)
+        {
+            invalidation_detected = true;
+        }
+        assert(invalidation_detected);
+
+        // 当前容量已满，头部插入会触发 expand()，返回值仍指向新内存中的插入元素。
+        auto inserted_front = values.insert(values.begin(), 5);
+        assert(*inserted_front == 5);
+        assert(values[0] == 5);
+
+        // 插入值引用容器内部元素；insert 会先复制该值，避免移动元素时改变它。
+        auto inserted_end = values.insert(values.end(), values[1]);
+        assert(*inserted_end == 10);
+        assert(values[values.size() - 1] == 10);
+
+        vector<int> other;
+        bool        wrong_owner_detected = false;
+        try
+        {
+            values.insert(other.begin(), 100);
+        }
+        catch (const std::invalid_argument &)
+        {
+            wrong_owner_detected = true;
+        }
+        assert(wrong_owner_detected);
     }
 
     Test t1, t2, t3;
