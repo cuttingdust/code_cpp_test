@@ -7,7 +7,8 @@
 #include <iterator>
 #include <cstdlib> // for rand()
 #include <stdexcept>
-#include <ctime>   // for time()
+#include <ctime> // for time()
+#include <vector>
 
 ///容器的空间配置器，负责内存的分配和对象的构造与析构
 
@@ -510,6 +511,113 @@ public:
 
 int main()
 {
+    {
+        // ==================== 迭代器失效示例 ====================
+        //
+        // 示例 1：自定义 vector 扩容后，所有旧迭代器都会失效。
+        // iterator 内部保存的是元素的内存地址。下面的 numbers 初始容量为 2，
+        // 插入第三个元素时 push_back() 会调用 expand()：
+        //   1. 申请一块更大的新内存；
+        //   2. 把旧元素复制到新内存；
+        //   3. 析构旧元素并释放旧内存；
+        //   4. 让 _first、_last 和 _end 指向新内存。
+        // old_it 仍然保存已经释放的旧内存地址，因此不能再解引用、递增或比较。
+        vector<int> numbers(2);
+        numbers.push_back(10);
+        numbers.push_back(20);
+
+        auto old_it = numbers.begin();
+        auto index  = old_it - numbers.begin();
+
+        numbers.push_back(30); // 容量不足，触发 expand()，old_it 从这里开始失效。
+
+        // 普通裸指针迭代器在这里会产生未定义行为。当前教学版 iterator 保存了容器
+        // 和版本号，因此比较、解引用或递增失效迭代器时会主动抛出异常。
+        bool comparison_detected = false;
+        try
+        {
+            (void)(old_it != numbers.end());
+        }
+        catch (const std::runtime_error &)
+        {
+            comparison_detected = true;
+        }
+        assert(comparison_detected);
+
+        bool dereference_detected = false;
+        try
+        {
+            (void)*old_it;
+        }
+        catch (const std::runtime_error &)
+        {
+            dereference_detected = true;
+        }
+        assert(dereference_detected);
+
+        // 正确：扩容前保存元素下标，扩容后通过新的 begin() 重建迭代器。
+        auto new_it = numbers.begin() + index;
+        assert(*new_it == 10);
+
+        // 示例 2：std::vector::erase() 会移动删除位置后面的元素。
+        // 删除 20 后，30 和 40 会向前移动。原来指向 20 的迭代器已经没有对应元素，
+        // 原来指向 30、40 和旧 end() 的迭代器也不再表示原来的位置。因此，删除位置
+        // 以及它后面的迭代器、指针和引用都会失效，只有删除位置之前的仍然有效。
+        std::vector<int> values{ 10, 20, 30, 40 };
+
+        // 错误写法：erase(it) 后 it 已失效，循环末尾的 ++it 会产生未定义行为。
+        // for (auto it = values.begin(); it != values.end(); ++it)
+        // {
+        //     if (*it == 20)
+        //     {
+        //         values.erase(it);
+        //     }
+        // }
+
+        // 正确写法：erase() 返回删除位置后新的有效迭代器，用它继续遍历。
+        for (auto it = values.begin(); it != values.end();)
+        {
+            if (*it == 20 || *it == 30)
+            {
+                it = values.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        assert((values == std::vector<int>{ 10, 40 }));
+
+        // 示例 3：std::vector::insert() 也可能导致迭代器失效。
+        // 情况 A：容量不足，insert() 触发重新分配。旧内存被释放，因此所有旧迭代器、
+        //         指针和引用都会失效，这与 push_back() 触发扩容时完全相同。
+        // 情况 B：容量足够，不需要重新分配。插入位置之后的元素仍要向后移动，因此
+        //         插入位置以及它后面的迭代器（包括旧 end()）都会失效；只有插入位置
+        //         之前的迭代器仍然有效。
+        std::vector<int> insert_values{ 10, 30, 40 };
+        insert_values.reserve(10); // 保证本例 insert() 不会触发扩容，只观察元素移动。
+
+        auto before_insert = insert_values.begin();     // 指向 10，位于插入位置之前。
+        auto at_insert     = insert_values.begin() + 1; // 指向 30，正好位于插入位置。
+
+        // insert() 返回指向新插入元素的有效迭代器，应当使用这个返回值继续操作。
+        auto inserted = insert_values.insert(at_insert, 20);
+
+        assert(*before_insert == 10); // 插入位置之前的迭代器仍然有效。
+        assert(*inserted == 20);
+        assert((insert_values == std::vector<int>{ 10, 20, 30, 40 }));
+
+        // 错误：at_insert 原来指向 30，但 30 已被移动到新位置，at_insert 已失效。
+        // 即使 *at_insert 偶尔看起来还能读到 20，也不能继续使用，结果属于未定义行为。
+        // std::cout << *at_insert << std::endl;
+
+        // 通用正确做法：不要依赖 insert() 前位于插入点及其后的旧迭代器，
+        // 直接保存并使用 insert() 返回的新迭代器；若要找其他元素，则重新获取迭代器。
+        auto moved_30 = insert_values.begin() + 2;
+        assert(*moved_30 == 30);
+    }
+
     {
         vector<int> numbers;
         numbers.push_back(10);
