@@ -412,6 +412,35 @@ public:
         return iterator(this, insert_pos, _version);
     }
 
+    iterator erase(iterator pos)
+    {
+        pos.check_valid();
+        if (pos._owner != this)
+        {
+            throw std::invalid_argument("erase iterator belongs to a different vector");
+        }
+        if (pos._ptr < _first || pos._ptr >= _last)
+        {
+            throw std::out_of_range("erase iterator is out of range");
+        }
+
+        const size_t index     = static_cast<size_t>(pos._ptr - _first);
+        T           *erase_pos = _first + index;
+
+        // 删除位置后面的元素依次向前移动，最后一个位置变成重复元素后再将其析构。
+        for (T *current = erase_pos; current + 1 != _last; ++current)
+        {
+            *current = *(current + 1);
+        }
+
+        --_last;
+        _allocator.destroy(_last);
+        ++_version; // 当前教学实现采用保守策略：erase 后所有旧迭代器均失效。
+
+        // 如果删除的是最后一个元素，erase_pos 此时等于新的 _last，也就是 end()。
+        return iterator(this, erase_pos, _version);
+    }
+
     void pop_back()
     {
         if (empty())
@@ -766,6 +795,64 @@ int main()
         try
         {
             values.insert(other.begin(), 100);
+        }
+        catch (const std::invalid_argument &)
+        {
+            wrong_owner_detected = true;
+        }
+        assert(wrong_owner_detected);
+    }
+
+    {
+        vector<int> values;
+        values.push_back(10);
+        values.push_back(20);
+        values.push_back(30);
+        values.push_back(40);
+
+        auto old_it      = values.begin();
+        auto after_erase = values.erase(values.begin() + 1);
+
+        // 删除 20 后，30 移动到删除位置；返回的迭代器应当指向 30。
+        assert(*after_erase == 30);
+        assert(values.size() == 3);
+        assert(values[0] == 10);
+        assert(values[1] == 30);
+        assert(values[2] == 40);
+
+        bool invalidation_detected = false;
+        try
+        {
+            (void)*old_it;
+        }
+        catch (const std::runtime_error &)
+        {
+            invalidation_detected = true;
+        }
+        assert(invalidation_detected);
+
+        // 删除最后一个元素时，erase() 返回新的 end()。
+        auto after_last = values.erase(values.end() - 1);
+        assert(after_last == values.end());
+        assert(values.size() == 2);
+
+        bool end_rejected = false;
+        try
+        {
+            values.erase(values.end());
+        }
+        catch (const std::out_of_range &)
+        {
+            end_rejected = true;
+        }
+        assert(end_rejected);
+
+        vector<int> other;
+        other.push_back(100);
+        bool wrong_owner_detected = false;
+        try
+        {
+            values.erase(other.begin());
         }
         catch (const std::invalid_argument &)
         {
