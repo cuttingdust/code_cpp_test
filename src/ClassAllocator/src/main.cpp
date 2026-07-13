@@ -53,12 +53,25 @@ public:
 
         iterator() = default;
 
-        reference operator*() const { return *_ptr; }
-        pointer   operator->() const { return _ptr; }
-        reference operator[](difference_type offset) const { return _ptr[offset]; }
+        reference operator*() const
+        {
+            check_valid();
+            return *_ptr;
+        }
+        pointer operator->() const
+        {
+            check_valid();
+            return _ptr;
+        }
+        reference operator[](difference_type offset) const
+        {
+            check_valid();
+            return _ptr[offset];
+        }
 
         iterator &operator++()
         {
+            check_valid();
             ++_ptr;
             return *this;
         }
@@ -72,6 +85,7 @@ public:
 
         iterator &operator--()
         {
+            check_valid();
             --_ptr;
             return *this;
         }
@@ -85,23 +99,70 @@ public:
 
         iterator &operator+=(difference_type offset)
         {
+            check_valid();
             _ptr += offset;
             return *this;
         }
 
-        iterator &operator-=(difference_type offset) { return *this += -offset; }
+        iterator &operator-=(difference_type offset)
+        {
+            return *this += -offset;
+        }
 
-        friend iterator operator+(iterator it, difference_type offset) { return it += offset; }
-        friend iterator operator+(difference_type offset, iterator it) { return it += offset; }
-        friend iterator operator-(iterator it, difference_type offset) { return it -= offset; }
-        friend difference_type operator-(iterator lhs, iterator rhs) { return lhs._ptr - rhs._ptr; }
-        friend bool operator==(iterator lhs, iterator rhs) = default;
-        friend auto operator<=>(iterator lhs, iterator rhs) = default;
+        friend iterator operator+(iterator it, difference_type offset)
+        {
+            return it += offset;
+        }
+        friend iterator operator+(difference_type offset, iterator it)
+        {
+            return it += offset;
+        }
+        friend iterator operator-(iterator it, difference_type offset)
+        {
+            return it -= offset;
+        }
+        friend difference_type operator-(iterator lhs, iterator rhs)
+        {
+            lhs.check_same_owner(rhs);
+            return lhs._ptr - rhs._ptr;
+        }
+        friend bool operator==(iterator lhs, iterator rhs)
+        {
+            lhs.check_same_owner(rhs);
+            return lhs._ptr == rhs._ptr;
+        }
+        friend auto operator<=>(iterator lhs, iterator rhs)
+        {
+            lhs.check_same_owner(rhs);
+            return lhs._ptr <=> rhs._ptr;
+        }
 
     private:
-        explicit iterator(pointer ptr) : _ptr(ptr) {}
+        iterator(vector *owner, pointer ptr, size_t version) : _owner(owner), _ptr(ptr), _version(version)
+        {
+        }
 
+        vector *_owner{ nullptr };
         pointer _ptr{ nullptr };
+        size_t  _version{ 0 };
+
+        void check_valid() const
+        {
+            if (_owner == nullptr || _version != _owner->_version)
+            {
+                throw std::runtime_error("invalid vector iterator");
+            }
+        }
+
+        void check_same_owner(const iterator &other) const
+        {
+            check_valid();
+            other.check_valid();
+            if (_owner != other._owner)
+            {
+                throw std::runtime_error("iterators belong to different vectors");
+            }
+        }
 
         friend class vector;
         friend class const_iterator;
@@ -118,14 +179,30 @@ public:
         using reference         = const T &;
 
         const_iterator() = default;
-        const_iterator(iterator it) : _ptr(it._ptr) {}
+        const_iterator(iterator it) : _owner(it._owner), _ptr(it._ptr), _version(it._version)
+        {
+            it.check_valid();
+        }
 
-        reference operator*() const { return *_ptr; }
-        pointer   operator->() const { return _ptr; }
-        reference operator[](difference_type offset) const { return _ptr[offset]; }
+        reference operator*() const
+        {
+            check_valid();
+            return *_ptr;
+        }
+        pointer operator->() const
+        {
+            check_valid();
+            return _ptr;
+        }
+        reference operator[](difference_type offset) const
+        {
+            check_valid();
+            return _ptr[offset];
+        }
 
         const_iterator &operator++()
         {
+            check_valid();
             ++_ptr;
             return *this;
         }
@@ -139,6 +216,7 @@ public:
 
         const_iterator &operator--()
         {
+            check_valid();
             --_ptr;
             return *this;
         }
@@ -152,23 +230,71 @@ public:
 
         const_iterator &operator+=(difference_type offset)
         {
+            check_valid();
             _ptr += offset;
             return *this;
         }
 
-        const_iterator &operator-=(difference_type offset) { return *this += -offset; }
+        const_iterator &operator-=(difference_type offset)
+        {
+            return *this += -offset;
+        }
 
-        friend const_iterator operator+(const_iterator it, difference_type offset) { return it += offset; }
-        friend const_iterator operator+(difference_type offset, const_iterator it) { return it += offset; }
-        friend const_iterator operator-(const_iterator it, difference_type offset) { return it -= offset; }
-        friend difference_type operator-(const_iterator lhs, const_iterator rhs) { return lhs._ptr - rhs._ptr; }
-        friend bool operator==(const_iterator lhs, const_iterator rhs) = default;
-        friend auto operator<=>(const_iterator lhs, const_iterator rhs) = default;
+        friend const_iterator operator+(const_iterator it, difference_type offset)
+        {
+            return it += offset;
+        }
+        friend const_iterator operator+(difference_type offset, const_iterator it)
+        {
+            return it += offset;
+        }
+        friend const_iterator operator-(const_iterator it, difference_type offset)
+        {
+            return it -= offset;
+        }
+        friend difference_type operator-(const_iterator lhs, const_iterator rhs)
+        {
+            lhs.check_same_owner(rhs);
+            return lhs._ptr - rhs._ptr;
+        }
+        friend bool operator==(const_iterator lhs, const_iterator rhs)
+        {
+            lhs.check_same_owner(rhs);
+            return lhs._ptr == rhs._ptr;
+        }
+        friend auto operator<=>(const_iterator lhs, const_iterator rhs)
+        {
+            lhs.check_same_owner(rhs);
+            return lhs._ptr <=> rhs._ptr;
+        }
 
     private:
-        explicit const_iterator(pointer ptr) : _ptr(ptr) {}
+        const_iterator(const vector *owner, pointer ptr, size_t version)
+            : _owner(owner), _ptr(ptr), _version(version)
+        {
+        }
 
+        const vector *_owner{ nullptr };
         pointer _ptr{ nullptr };
+        size_t  _version{ 0 };
+
+        void check_valid() const
+        {
+            if (_owner == nullptr || _version != _owner->_version)
+            {
+                throw std::runtime_error("invalid vector const_iterator");
+            }
+        }
+
+        void check_same_owner(const const_iterator &other) const
+        {
+            check_valid();
+            other.check_valid();
+            if (_owner != other._owner)
+            {
+                throw std::runtime_error("const_iterators belong to different vectors");
+            }
+        }
 
         friend class vector;
     };
@@ -226,6 +352,7 @@ public:
             // *dst = *src;
             _allocator.construct(dst, *src);
         }
+        ++_version;
         return *this;
     }
 
@@ -238,6 +365,7 @@ public:
         // *_last = value;
         _allocator.construct(_last, value);
         ++_last;
+        ++_version;
     }
 
     void pop_back()
@@ -247,6 +375,7 @@ public:
         // --_last;
         _allocator.destroy(_last - 1);
         --_last;
+        ++_version;
     }
 
     T &back()
@@ -276,22 +405,22 @@ public:
 
     iterator begin() noexcept
     {
-        return iterator(_first);
+        return iterator(this, _first, _version);
     }
 
     iterator end() noexcept
     {
-        return iterator(_last);
+        return iterator(this, _last, _version);
     }
 
     const_iterator begin() const noexcept
     {
-        return const_iterator(_first);
+        return const_iterator(this, _first, _version);
     }
 
     const_iterator end() const noexcept
     {
-        return const_iterator(_last);
+        return const_iterator(this, _last, _version);
     }
 
     const_iterator cbegin() const noexcept
@@ -327,6 +456,7 @@ private:
     T    *_last  = nullptr;
     T    *_end   = nullptr;
     Alloc _allocator; /// 定义容器的空间配置器对象
+    size_t _version{ 0 }; /// 结构修改后递增，用于检测旧迭代器是否失效
 
     void expand()
     {
